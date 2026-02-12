@@ -40,8 +40,8 @@ function setStatus(connected) {
     }
 }
 
-// Manual connect (when user changes inputs)
-function connect() {
+// Manual reconnect (when user changes inputs)
+function reconnect() {
     apiUrl = document.getElementById('apiUrl').value;
     wsUrl = document.getElementById('wsUrl').value;
     
@@ -193,7 +193,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // Export for global access
-window.connect = connect;
+window.reconnect = reconnect;
 window.fetchVarz = fetchVarz;
 window.fetchConnz = fetchConnz;
 window.fetchSubsz = fetchSubsz;

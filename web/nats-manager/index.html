@@ -37,7 +37,7 @@
         <h2>Server Connection</h2>
         <label>NATS HTTP API: <input type="text" id="apiUrl" value="{{NATS_HTTP_URL}}" style="width: 300px;"></label>
         <label>NATS WebSocket: <input type="text" id="wsUrl" value="{{NATS_WS_URL}}" style="width: 300px;"></label>
-        <button class="refresh" onclick="connect()">Connect</button>
+        <button class="refresh" onclick="reconnect()">Connect</button>
         <span id="connectionStatus" class="status error">Disconnected</span>
     </div>
 
@@ -80,6 +80,6 @@
             domain: "{{NATS_MANAGER_DOMAIN}}"
         };
     </script>
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=2"></script>
 </body>
 </html>
