@@ -5,6 +5,14 @@ metadata:
   role: "gateway"
 
 capabilities:
+  # Operational subjects (standard for all guardians)
+  - subject: "ops.heartbeat.sdr-bridge-01"
+    allow: ["pub"]
+  - subject: "ops.echo.sdr-bridge-01"
+    allow: ["pub", "sub"]
+  - subject: "ops.metric.rtt.sdr-bridge-01"
+    allow: ["pub"]
+  # Business subjects
   - subject: "com.bridge.vhf.ch16.voice"
     allow: ["pub", "sub"]
   - subject: "nav.bridge.vhf.all.data"
