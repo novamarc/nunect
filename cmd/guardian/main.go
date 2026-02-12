@@ -1,29 +1,47 @@
 package main
 
 import (
-	"fmt"
+	"os"
 	"time"
 	"log"
+	"crypto/tls"
+	"fmt"
 	"nunect/internal/config"
 	"github.com/nats-io/nats.go"
 )
 
 func main() {
-	// Hier wird 'p' als Instanz deines geladenen Profils erstellt
-	p, err := config.Load("connector-profile.yaml")
-	if err != nil {
-		log.Fatalf("Konnte Profil nicht laden: %v", err)
+	p, _ := config.Load("connector-profile.yaml")
+
+	// 1. Zugangsdaten aus der .env / Umgebung laden
+	user := os.Getenv("NATS_USER")
+	pass := os.Getenv("NATS_PASSWORD")
+	serverURL := os.Getenv("NATS_URL") // z.B. nats://127.0.0.1:4222
+
+	if user == "" || pass == "" {
+		log.Fatal("NATS_USER oder NATS_PASSWORD nicht gesetzt!")
 	}
 
-	// Jetzt ist 'p' bekannt und wir können darauf zugreifen
-	log.Printf("Guardian geladen: %s", p.Metadata.UnitID)
+	// 2. Verbindung mit TLS & Auth
+	opts := []nats.Option{
+		nats.UserInfo(user, pass),
+		// Da du WSS/TLS nutzt, aktivieren wir Secure-Mode
+		// InsecureSkipVerify: true, falls das Cert self-signed ist
+		nats.Secure(&tls.Config{InsecureSkipVerify: true}),
+		nats.RetryOnFailedConnect(true),
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(2 * time.Second),
+	}
 
-	// Verbindung zum NATS-Master
-	nc, err := nats.Connect(nats.DefaultURL)
+	nc, err := nats.Connect(serverURL, opts...)
 	if err != nil {
-		log.Fatalf("NATS Fehler: %v", err)
+		log.Fatalf("Login fehlgeschlagen: %v", err)
 	}
 	defer nc.Close()
+
+	log.Printf("Guardian [%s] erfolgreich eingeloggt!", p.Metadata.UnitID)
+    
+    // ... Rest deines Codes (Heartbeat/Parrot)
 
 	log.Println("Verbunden mit NATS Master.")
 
