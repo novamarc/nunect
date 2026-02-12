@@ -1,0 +1,11 @@
+# NATS Guardian Provisioning Profile
+metadata:
+  unit_id: "sdr-bridge-01"
+  tenant: "bridge"
+  role: "gateway"
+
+capabilities:
+  - subject: "com.bridge.vhf.ch16.voice"
+    allow: ["pub", "sub"]
+  - subject: "nav.bridge.vhf.all.data"
+    allow: ["pub"]

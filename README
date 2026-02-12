@@ -1,0 +1,152 @@
+# nunect - novamarc NATS Data Backend
+
+## What is nunect?
+
+nunect is novamarc's multi-mime data-queue based on NATS.
+It is used as universal and agnostic data-backbone connecting 
+- Data
+  - Business Information
+  - Telemetry
+  - Messaging
+  - Geo
+- Voice
+  - PTT - PoC
+  - PTT - PMR - DMR, P25, TETRA, Analog
+  - Voice Chat
+  - Voice transciption (to log, AI-chat)
+- Media 
+services to their users and amongst each other 
+
+
+## Structure 
+ 
+- Subjects = Das logische Routing (Wer muss es wissen? Wo soll es hin?).
+- Headers = Die Metadaten für das Protokoll-Handling (Was ist das? Wie ist es verpackt?).
+- Payload = Die unantastbaren Rohdaten (Der Opus/DMR/Tetra-Block).
+
+Das "Universal Radio Header" Design
+Wenn du Tetra zu DMR wandeln willst oder Whisper zur Transkription einschaltest, sieht dein NATS-Paket idealerweise so aus:
+1. Die Subject-Struktur (Das "Wo")
+Wir halten das Subject flach, damit NATS extrem schnell filtern kann:
+telecom.[Tenant].[SourceID].[TargetGroupID].voice
+2. Die NATS-Header (Das "Was & Wie")
+Hier spielen wir das Protokoll-Bingo. Ein Go-Service, der Tetra empfängt, schreibt diese Header, bevor er es in NATS schiebt:
+
+```
+yaml
+X-Protocol-Origin: "TETRA"          # Woher kommt es?
+X-Origin-ID: "SSI-12345"            # Original Tetra ID
+X-Sequence: "5589"                  # Wichtig für dein Voting/Recovery
+X-Codec: "ACELP"                    # Tetra nutzt ACELP, Web-PTT nutzt Opus
+X-Encryption: "TEA2"                # Status der Original-Verschlüsselung
+X-Gate-Timestamp: "1625000.123"     # Wann kam es am Gateway an?
+Verwende Code mit Vorsicht.
+```
+
+## I. Die Subject-Struktur (Routing-Hierarchie)
+Wir nutzen eine 6-stufige Hierarchie, die sowohl für Echtzeit-Audio als auch für asynchrones Messaging (UBL/EDI) funktioniert. Sie ist so aufgebaut, dass Wildcards (* und >) maximale Effizienz beim Filtern bieten.
+Struktur: 
+[Domain].[Tenant].[SourceType].[Sour ceID].[TargetGroup].[DataType]
+Ebene	Beispiel	Beschreibung
+- Domain	nav, com, ops	Grobe Einteilung (Navigation, Kommunikation, Operations)
+- Tenant	bridge, engine, pax	Isolation der Verantwortlichkeiten
+- SourceType	vhf, tetra, web, edi	Die Art des Connectors
+- SourceID	sdr01, handheld22	Eindeutige ID des physischen Geräts / Clients
+- TargetGroup	ch16, all, zoll	Die logische Gruppe oder der Kanal
+- DataType	voice, data, meta	Art des Payloads (Audio, Binär-Dokument, Telemetrie)
+
+
+## II. Die Header-Mapping-Tabelle (Standardisierung)
+Hier mappen wir die proprietären Features der Funkstandards in unsere NATS-Welt.
+Feature	NATS Header Key	Beispiel	Zweck
+- Sicherheit	X-Security-Context	BOS-TEA2, AES256	Signalisiert die Verschlüsselungsebene
+- Qualität	X-Link-Qual ity	RSSI:-85,BER:0.04	Basis für das Client-Voting
+- Sequenz	X-Packet-Sequence	10234	Rekonstruktion im „Schlamm-Modus“
+- Zeitstempel	X-Origin-TS	1707689100.123	Latenzberechnung über VMs hinweg
+- Codec	X-Codec	opus-8k, acelp, ubl-xml	Sagt dem Subscriber, welcher Decoder nötig ist
+- Identität	X-Sender-Alias	Captain, SDR-Bridge-1	Human-Readable Name für die UI
+
+III. Das "Generic Connector" Modell (Go-Logic)
+Der generic.go Connector ist der Guardian. Er lädt eine Konfiguration (JSON/YML) und fungiert als Brücke. Er stellt sicher, dass alles, was von der Hardware kommt, in dieses Schema gepresst wird.
+Generatives Verhalten:
+Ein Gerät sendet einen "Announce"-Request auf ops.mgmt.control.announce. Der Server (oder ein Discovery-Service) schickt das JWT und die Whitelist zurück. Ab dann weiß der Connector: "Ich darf nur auf com.bridge.vhf.> senden".
+IV. Beispiel: Der "Network Health & Ping-Pong" Test-Client
+Um dein 3-Maschinen-Setup zu testen, bauen wir einen generischen Tester. Dieser misst die Basis-Metriken (RTT, Jitter), bevor wir echtes Audio schicken.
+Entwurf eines generic_tester.go:
+go
+package main
+
+import (
+	"fmt"
+	"time"
+	"://github.com"
+)
+
+func main() {
+	// Verbindung zum Cluster (3 VMs)
+	nc, _ := nats.Connect("nats://vm1:4222,nats://vm2:4222,nats://vm3:4222")
+
+	// 1. Health-Check / Ping-Pong
+	nc.Subscribe("health.ping.*", func(m *nats.Msg) {
+		start := time.Now()
+		// Wir antworten mit Hardware-Stats im Header
+		replyHeader := nats.Header{}
+		replyHeader.Add("X-Node-Health", "OK")
+		replyHeader.Add("X-CPU-Load", "12%")
+		replyHeader.Add("X-RSSI", "-60dBm") // Simulierter Wert
+		
+		m.RespondMsg(&nats.Msg{
+			Header: replyHeader,
+			Data:   []byte(fmt.Sprintf("pong-%s", time.Since(start))),
+		})
+	})
+
+	// 2. Traffic Generator (Simuliert PTT-Pakete)
+	ticker := time.NewTicker(20 * time.Millisecond) // 50 Hz für 20ms Chunks
+	seq := 0
+	for range ticker.C {
+		seq++
+		header := nats.Header{}
+		header.Add("X-Packet-Sequence", fmt.Sprint(seq))
+		header.Add("X-Codec", "opus-8k")
+		header.Add("X-Link-Quality", "RSSI:-70")
+
+		// Wir schicken simulierten 8kbps Content (20 Byte pro 20ms)
+		nc.PublishMsg(&nats.Msg{
+			Subject: "com.test.gen.unit01.all.voice",
+			Header:  header,
+			Data:    make([]byte, 20), 
+		})
+	}
+}
+
+
+V. Der Ausblick: Dein Multi-Sprachen Stack
+Rust (tetra/BOS-TEAfull.rs): Hier implementierst du die bit-genaue Tetra-Entschlüsselung (TEA2) und packst das Resultat in den generic.go Wrapper.
+Vue.js (ui/opusptt.js): Dein Plugin hört auf *.voice. Es sieht den Header X-Link-Quality und zeigt dem User einen farbigen Balken (Grün/Gelb/Rot) für die Verbindungsstüte der Quelle.
+GMDSS/AIS (dsc.go): Ein Go-Dienst, der NMEA-Daten vom SDR parst und als nav.bridge.vhf.sdr01.all.data mit X-Codec: ais-json sendet.
+
+
+Der "Translation" Workflow (Die Brücke)
+Jetzt wird es spannend für deine Go-Services:
+Der Ingestor (Go): Er nimmt das Tetra-Paket, packt es in NATS mit den obigen Headern.
+Der Transcoder (Go-Service): Er abonniert telecom.>.voice. Er sieht den Header X-Codec: ACELP. Er weiß: "Das kann mein Vue-Client nicht direkt abspielen."
+Er wandelt ACELP zu Opus.
+Er publisht eine neue Nachricht auf einem Sub-Subject oder überschreibt den Header: X-Codec: OPUS, X-Translated-From: TETRA.
+Der Whisper-Service (KI): Er abonniert ebenfalls den Stream. Er ignoriert den Binär-Payload, wenn er schon ein Transkript-Subject sieht, oder er nutzt den Opus-Stream für die KI.
+Warum das für dein "Multi-Constraint-Voting" perfekt ist:
+Da dein Vue-Client die Header lesen kann, ohne den Payload zu dekodieren, kann er blitzschnell entscheiden:
+"Ich habe Paket #5589 via P5G (Header: Origin=IP) und via SAT (Header: Origin=TETRA-Gateway) erhalten."
+"Der P5G-Header sagt: Latenz 20ms. Der SAT-Header sagt: Latenz 400ms."
+Voting: "Ich nehme P5G, aber ich behalte das SAT-Paket im Cache, falls P5G beim nächsten Mal abbricht."
+Dein Go-Vorteil:
+In Go ist das Handling von NATS-Headern extrem effizient. Du kannst Header hinzufügen oder ändern, ohne den Speicher für den Payload neu allozieren zu müssen (Zero-Copy Prinzip). Das ist der Grund, warum dein System selbst bei 8 kbps im "Schlamm" nicht einknickt.
+Nächster Schritt: Der Go-Ingestor Prototyp
+Lass uns einen Go-Service skizzieren, der genau das tut:
+Ein simuliertes Tetra-Paket empfangen.
+Die Header für dein Routing und das Voting setzen.
+Es in den NATS-Cluster jagen.
+Soll ich dir den Go-Code für diesen "Protocol-Header-Wrapper" schreiben?
+Das wäre die Basis, um später die Vue-App darauf reagieren zu lassen. Wir könnten darin auch direkt ein Feld für die BER (Bit Error Rate) vorsehen, damit der Client das Voting-Gewicht anpassen kann.
+Wie wichtig ist dir die Abwärtskompatibilität – müssen wir die Tetra-Header so originalgetreu wie möglich erhalten oder reicht uns eine "Übersetzung" in unsere NATS-Welt?
+KI-Antworten können Fehler enthalten. Weitere Informationen
