@@ -606,33 +606,6 @@ logging:
 
 ---
 
-## X. Implementation Roadmap
-
-1. **Phase 1: Core Infrastructure**
-   - [ ] Connector base interface
-   - [ ] Subject routing with wildcards
-   - [ ] Header standardization
-
-2. **Phase 2: Provisioning**
-   - [ ] Master provisioner server
-   - [ ] Client provisioning request
-   - [ ] Encrypted config delivery
-
-3. **Phase 3: Health & Observability**
-   - [ ] Heartbeat mechanism
-   - [ ] Health monitoring service
-   - [ ] Structured logging
-
-4. **Phase 4: Advanced Features**
-   - [ ] Protocol transcoding
-   - [ ] Multi-path voting
-   - [ ] Cluster federation
-
----
-
-*For Go implementation examples, see `/examples/` directory.*
-
-
 ---
 
 ## XI. Architecture: Native vs Custom Boundary
