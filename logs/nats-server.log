@@ -298,3 +298,59 @@
 [127331] 2026/02/12 19:56:10.397052 [INF] Listening for client connections on 0.0.0.0:4222
 [127331] 2026/02/12 19:56:10.397109 [INF] TLS required for client connections
 [127331] 2026/02/12 19:56:10.397495 [INF] Server is ready
+[200484] 2026/02/12 22:02:28.815559 [INF] Starting nats-server
+[200484] 2026/02/12 22:02:28.815631 [INF]   Version:  2.10.7
+[200484] 2026/02/12 22:02:28.815638 [INF]   Git:      [not set]
+[200484] 2026/02/12 22:02:28.815643 [INF]   Name:     nunect-dev
+[200484] 2026/02/12 22:02:28.815648 [INF]   Node:     WNVPitUc
+[200484] 2026/02/12 22:02:28.815652 [INF]   ID:       NCH7YRMLDYUNUVIROOIC3EO3IBZBKUVKF7ZJVCHNXFSVO4L3ZCWTSKVP
+[200484] 2026/02/12 22:02:28.815664 [WRN] Plaintext passwords detected, use nkeys or bcrypt
+[200484] 2026/02/12 22:02:28.815679 [INF] Using configuration file: /home/caia/GitHub/nunect/config/nats-server-runtime.conf
+[200484] 2026/02/12 22:02:28.816214 [INF] Starting https monitor on 0.0.0.0:8444
+[200484] 2026/02/12 22:02:28.816267 [INF] Starting JetStream
+[200484] 2026/02/12 22:02:28.816392 [INF]     _ ___ _____ ___ _____ ___ ___   _   __  __
+[200484] 2026/02/12 22:02:28.816400 [INF]  _ | | __|_   _/ __|_   _| _ \ __| /_\ |  \/  |
+[200484] 2026/02/12 22:02:28.816404 [INF] | || | _|  | | \__ \ | | |   / _| / _ \| |\/| |
+[200484] 2026/02/12 22:02:28.816407 [INF]  \__/|___| |_| |___/ |_| |_|_\___/_/ \_\_|  |_|
+[200484] 2026/02/12 22:02:28.816410 [INF] 
+[200484] 2026/02/12 22:02:28.816413 [INF]          https://docs.nats.io/jetstream
+[200484] 2026/02/12 22:02:28.816416 [INF] 
+[200484] 2026/02/12 22:02:28.816420 [INF] ---------------- JETSTREAM ----------------
+[200484] 2026/02/12 22:02:28.816428 [INF]   Max Memory:      1.00 GB
+[200484] 2026/02/12 22:02:28.816433 [INF]   Max Storage:     10.00 GB
+[200484] 2026/02/12 22:02:28.816437 [INF]   Store Directory: "data/nats/jetstream"
+[200484] 2026/02/12 22:02:28.816440 [INF] -------------------------------------------
+[200484] 2026/02/12 22:02:28.816850 [INF] Listening for websocket clients on wss://0.0.0.0:8443
+[200484] 2026/02/12 22:02:28.817314 [INF] Listening for client connections on 0.0.0.0:4222
+[200484] 2026/02/12 22:02:28.817329 [INF] TLS required for client connections
+[200484] 2026/02/12 22:02:28.817688 [INF] Server is ready
+[200484] 2026/02/12 22:29:55.833304 [INF] Initiating Shutdown...
+[200484] 2026/02/12 22:29:55.833350 [INF] Initiating JetStream Shutdown...
+[200484] 2026/02/12 22:29:55.833361 [INF] JetStream Shutdown
+[200484] 2026/02/12 22:29:55.833564 [INF] Server Exiting..
+[212806] 2026/02/12 22:29:59.381780 [INF] Starting nats-server
+[212806] 2026/02/12 22:29:59.381853 [INF]   Version:  2.10.7
+[212806] 2026/02/12 22:29:59.381860 [INF]   Git:      [not set]
+[212806] 2026/02/12 22:29:59.381864 [INF]   Name:     nunect-dev
+[212806] 2026/02/12 22:29:59.381870 [INF]   Node:     WNVPitUc
+[212806] 2026/02/12 22:29:59.381873 [INF]   ID:       ND7AM74CISHRY3XWMJD34FN5VB6WTZMQVIBNYADRC5RIEG3KUFZMW64Y
+[212806] 2026/02/12 22:29:59.381885 [WRN] Plaintext passwords detected, use nkeys or bcrypt
+[212806] 2026/02/12 22:29:59.381894 [INF] Using configuration file: /home/caia/GitHub/nunect/config/nats-server-runtime.conf
+[212806] 2026/02/12 22:29:59.382393 [INF] Starting https monitor on 0.0.0.0:8444
+[212806] 2026/02/12 22:29:59.382443 [INF] Starting JetStream
+[212806] 2026/02/12 22:29:59.382581 [INF]     _ ___ _____ ___ _____ ___ ___   _   __  __
+[212806] 2026/02/12 22:29:59.382588 [INF]  _ | | __|_   _/ __|_   _| _ \ __| /_\ |  \/  |
+[212806] 2026/02/12 22:29:59.382591 [INF] | || | _|  | | \__ \ | | |   / _| / _ \| |\/| |
+[212806] 2026/02/12 22:29:59.382594 [INF]  \__/|___| |_| |___/ |_| |_|_\___/_/ \_\_|  |_|
+[212806] 2026/02/12 22:29:59.382598 [INF] 
+[212806] 2026/02/12 22:29:59.382601 [INF]          https://docs.nats.io/jetstream
+[212806] 2026/02/12 22:29:59.382604 [INF] 
+[212806] 2026/02/12 22:29:59.382607 [INF] ---------------- JETSTREAM ----------------
+[212806] 2026/02/12 22:29:59.382615 [INF]   Max Memory:      1.00 GB
+[212806] 2026/02/12 22:29:59.382619 [INF]   Max Storage:     10.00 GB
+[212806] 2026/02/12 22:29:59.382623 [INF]   Store Directory: "data/nats/jetstream"
+[212806] 2026/02/12 22:29:59.382626 [INF] -------------------------------------------
+[212806] 2026/02/12 22:29:59.383038 [INF] Listening for websocket clients on wss://0.0.0.0:8443
+[212806] 2026/02/12 22:29:59.383502 [INF] Listening for client connections on 0.0.0.0:4222
+[212806] 2026/02/12 22:29:59.383518 [INF] TLS required for client connections
+[212806] 2026/02/12 22:29:59.383845 [INF] Server is ready

@@ -14,12 +14,12 @@ func main() {
 	p, _ := config.Load("connector-profile.yaml")
 
 	// 1. Zugangsdaten aus der .env / Umgebung laden
-	user := os.Getenv("NATS_USER")
-	pass := os.Getenv("NATS_PASSWORD")
+	user := os.Getenv("NATS_SYS_USER")
+	pass := os.Getenv("NATS_SYS_PASSWORD")
 	serverURL := os.Getenv("NATS_URL") // z.B. nats://127.0.0.1:4222
 
 	if user == "" || pass == "" {
-		log.Fatal("NATS_USER oder NATS_PASSWORD nicht gesetzt!")
+		log.Fatal("NATS_SYS_USER oder NATS_SYS_PASSWORD nicht gesetzt!")
 	}
 
 	// 2. Verbindung mit TLS & Auth
