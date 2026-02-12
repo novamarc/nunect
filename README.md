@@ -647,53 +647,64 @@ logging:
 
 ### Phase 1: Foundation
 
-#### 1.1 NATS Core Server
-- [ ] `scripts/nats-server.sh` - startup script with config
-- [ ] `config/nats-server.conf` - base configuration:
-  - Accounts for tenants
-  - System account (`SYS`) for monitoring
-  - HTTP monitoring port (8222)
-  - JetStream enabled for log persistence
-  - Initial users for development
+#### 1.1 NATS Core Server ✅ COMPLETE
+- [x] `scripts/nats-server.sh` - startup script with config
+- [x] `config/nats-server.conf` - base configuration:
+  - [x] Accounts for tenants (SYS, BRIDGE, ENGINE, PROVISION)
+  - [x] System account (`SYS`) for monitoring
+  - [x] HTTPS monitoring port (8444) with TLS
+  - [x] WebSocket Secure port (8443) with TLS
+  - [x] JetStream enabled for log persistence
+  - [x] Initial users for development
 
-#### 1.2 NATS Management UI (Vue-ready vanilla component)
-- [ ] `web/nats-manager/` - vanilla JS/TS component
-- [ ] Features:
-  - Display server stats (`/varz`)
-  - Display connections (`/connz`)
-  - Real-time connection events (subscribe `$SYS.ACCOUNT.>.CONNECT`)
-  - Display subscriptions (`/subsz`)
-  - Display routes/gateways (cluster view)
-- [ ] Rudimentary only: all values visible, functions callable
-- [ ] No styling focus - functional first
+#### 1.2 NATS Management UI (Vue-ready vanilla component) 🟡 IN PROGRESS
+- [x] `web/nats-manager/` - vanilla JS/TS component
+- [x] Core Features:
+  - [x] Display server stats (`/varz`)
+  - [x] Display connections (`/connz`)
+  - [x] Display subscriptions (`/subsz`)
+  - [x] Real-time events via WebSocket (`$SYS.>`)
+  - [x] TLS/WSS connection to NATS
+- [ ] Dashboard Features:
+  - [ ] Display routes/gateways (cluster view via `/routez`)
+  - [ ] Display JetStream streams/consumers (`/jsz`)
+  - [ ] Per-account connection view
+  - [ ] Parsed CONNECT/DISCONNECT events (not raw JSON)
+- [x] Rudimentary display: functional first
+- [x] Cloudflare-ready: works via tunnel
 
-#### 1.3 Generic TS/JS Client
-- [ ] `clients/ts/nunect-client/` - TypeScript client library
-- [ ] Features:
-  - WebSocket connection to NATS
-  - Authentication (JWT or username/password)
-  - Publish with headers
-  - Subscribe with wildcards
-  - Request-reply pattern
-  - Connection lifecycle management (reconnect, etc.)
-  - **Logging capability**: `logger.info()`, `logger.error()` → publishes to `ops.log.{level}.{unitID}`
-- [ ] This client will be embedded in web servers, UI clients, any JS/TS application
+#### 1.3 Generic TS/JS Client 🟡 IN PROGRESS
+- [x] `clients/ts/nunect-client/` - package structure
+- [ ] Core Client (`NunectClient` class):
+  - [ ] WebSocket connection to NATS
+  - [ ] Authentication (username/password)
+  - [ ] Publish with headers
+  - [ ] Subscribe with wildcards
+  - [ ] Unsubscribe
+  - [ ] Request-reply pattern
+  - [ ] Connection lifecycle (connect, disconnect, reconnect)
+- [ ] Logger Module:
+  - [ ] `logger.info()`, `logger.warn()`, `logger.error()`
+  - [ ] Publishes to `ops.log.{level}.{unitID}`
+- [ ] TypeScript declarations
+- [ ] Basic tests
 
-### Phase 2: Testing
+### Phase 2: Testing 🟡 IN PROGRESS
 
-- [ ] Connection tests: auth, reconnect, multiple clients
-- [ ] Management API tests: all endpoints reachable, data valid
+- [x] Connection tests: WSS working via Cloudflare
+- [x] Management API tests: HTTPS endpoints reachable
 - [ ] Generic client tests: pub/sub, headers, request-reply
 - [ ] Integration: UI shows live connection data
+- [ ] Playwright/Chromium automated tests
 
-### Phase 3: Provisioning & Health
+### Phase 3: Provisioning & Health (Future)
 
-- [ ] Guardian (Go): heartbeat publisher
-- [ ] Controller (Go): provision orchestration, dashboard backend
-- [ ] ProMan (Go): credential delivery
+- [ ] Guardian (Go): heartbeat publisher with health headers
+- [ ] Controller (Go): dashboard backend, provisioning orchestration
+- [ ] ~~ProMan (Go): provisioning execution~~ (DEFERRED)
 - [ ] Log module: `$SYS` event aggregation
 
-### Phase 4: Protocol Integration
+### Phase 4: Protocol Integration (Future)
 
 - [ ] TETRA ingestor
 - [ ] DMR bridge

@@ -1,0 +1,27 @@
+{
+  "name": "nunect",
+  "version": "1.0.0",
+  "description": "nunect is novamarc's multi-mime data-queue based on NATS. It serves as a universal and agnostic data-backbone connecting voice, data, and media services to their users and amongst each other.",
+  "main": "playwright.config.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/novamarc/nunect.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/novamarc/nunect/issues"
+  },
+  "homepage": "https://github.com/novamarc/nunect#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}

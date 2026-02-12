@@ -72,6 +72,44 @@
         </div>
     </div>
 
+    <div class="grid">
+        <div class="section">
+            <h2>Routes/Gateways (/routez)</h2>
+            <button class="refresh" onclick="fetchRoutez()">Refresh</button>
+            <div id="routez">Loading...</div>
+        </div>
+
+        <div class="section">
+            <h2>JetStream (/jsz)</h2>
+            <button class="refresh" onclick="fetchJsz()">Refresh</button>
+            <div id="jsz">Loading...</div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="section">
+            <h2>Accounts</h2>
+            <div id="accounts">
+                <table>
+                    <tr><th>Account</th><th>Users</th><th>JetStream</th><th>Conns</th></tr>
+                    <tr><td>SYS</td><td>1</td><td>-</td><td id="sys-conns">0</td></tr>
+                    <tr><td>BRIDGE</td><td>1</td><td>✓</td><td id="bridge-conns">0</td></tr>
+                    <tr><td>ENGINE</td><td>1</td><td>✓</td><td id="engine-conns">0</td></tr>
+                    <tr><td>PROVISION</td><td>1</td><td>-</td><td id="provision-conns">0</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Connection Activity</h2>
+            <button class="refresh" onclick="clearActivity()">Clear</button>
+            <span id="activityCount">0 events</span>
+            <div id="activityLog" style="max-height: 300px; overflow-y: auto;">
+                <div class="event">CONNECT/DISCONNECT events will appear here...</div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Configuration injected by server from .env
         window.NUNECT_CONFIG = {
