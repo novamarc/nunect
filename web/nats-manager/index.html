@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>nunect NATS Manager</title>
+    <style>
+        body { font-family: monospace; margin: 20px; background: #1a1a1a; color: #ddd; }
+        h1 { color: #7ee; border-bottom: 2px solid #7ee; padding-bottom: 10px; }
+        h2 { color: #e7e; margin-top: 30px; }
+        .section { background: #222; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        pre { background: #111; padding: 10px; overflow-x: auto; max-height: 400px; }
+        .refresh { background: #373; color: white; border: none; padding: 5px 15px; cursor: pointer; }
+        .refresh:hover { background: #4a4; }
+        .status { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; }
+        .status.ok { background: #373; }
+        .status.error { background: #733; }
+        .event { padding: 5px; margin: 2px 0; background: #333; font-size: 0.9em; }
+        .event.connect { border-left: 3px solid #7e7; }
+        .event.disconnect { border-left: 3px solid #e77; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #444; }
+        th { color: #7ee; }
+        .note { background: #332; padding: 10px; border-left: 3px solid #fa0; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>nunect NATS Manager <span id="domainDisplay" style="font-size: 0.5em; color: #888;"></span></h1>
+    
+    <div class="note">
+        <strong>Note:</strong> HTTP Monitoring API is read-only. 
+        Configuration changes require editing <code>config/nats-server.conf</code> and sending <code>nats-server -signal reload</code>.
+    </div>
+
+    <div class="section">
+        <h2>Server Connection</h2>
+        <label>NATS HTTP API: <input type="text" id="apiUrl" value="{{NATS_HTTP_URL}}" style="width: 300px;"></label>
+        <label>NATS WebSocket: <input type="text" id="wsUrl" value="{{NATS_WS_URL}}" style="width: 300px;"></label>
+        <button class="refresh" onclick="connect()">Connect</button>
+        <span id="connectionStatus" class="status error">Disconnected</span>
+    </div>
+
+    <div class="grid">
+        <div class="section">
+            <h2>Server Stats (/varz)</h2>
+            <button class="refresh" onclick="fetchVarz()">Refresh</button>
+            <pre id="varz">Loading configuration...</pre>
+        </div>
+
+        <div class="section">
+            <h2>Connections (/connz)</h2>
+            <button class="refresh" onclick="fetchConnz()">Refresh</button>
+            <div id="connz">Loading configuration...</div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="section">
+            <h2>Subscriptions (/subsz)</h2>
+            <button class="refresh" onclick="fetchSubsz()">Refresh</button>
+            <pre id="subsz">Loading configuration...</pre>
+        </div>
+
+        <div class="section">
+            <h2>Live Events ($SYS)</h2>
+            <button class="refresh" onclick="clearEvents()">Clear</button>
+            <span id="eventCount">0 events</span>
+            <div id="events" style="max-height: 400px; overflow-y: auto;">
+                <div class="event">WebSocket events will appear here...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration injected by server from .env
+        window.NUNECT_CONFIG = {
+            natsHttpUrl: "{{NATS_HTTP_URL}}",
+            natsWsUrl: "{{NATS_WS_URL}}"
+        };
+    </script>
+    <script type="module" src="app.js"></script>
+</body>
+</html>

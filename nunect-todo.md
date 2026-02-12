@@ -6,35 +6,43 @@
 
 ## Phase 1.1: NATS Core Server
 
-- [ ] Create `scripts/nats-server.sh` startup script
+- [x] Create `scripts/nats-server.sh` startup script
   - [ ] Read config from .env
   - [ ] Start with proper data dir
   - [ ] Enable JetStream
-- [ ] Create `config/nats-server.conf`
-  - [ ] Define SYS account for monitoring
-  - [ ] Define initial test accounts
-  - [ ] Enable HTTP monitoring on port 8222
-  - [ ] Configure JetStream
-- [ ] Create `.env` with server configuration
+- [x] Create `config/nats-server.conf`
+  - [x] Define SYS account for monitoring
+  - [x] Define initial test accounts (BRIDGE, ENGINE, PROVISION)
+  - [x] Enable HTTP monitoring
+  - [x] Configure JetStream
+- [x] Create `.env` from template
   - [ ] NATS_PORT, NATS_HTTP_PORT
   - [ ] Data directories
   - [ ] Initial credentials (dev only)
-- [ ] Test: Server starts, responds to `/varz`
+- [x] Test: Server starts on port 4223, responds to `/varz` on 8223
 
 ---
 
 ## Phase 1.2: NATS Management UI
 
-- [ ] Create `web/nats-manager/` directory structure
-- [ ] Implement vanilla TS/JS component
-  - [ ] Fetch and display `/varz` (server stats)
-  - [ ] Fetch and display `/connz` (connections)
-  - [ ] Subscribe `$SYS.ACCOUNT.>.CONNECT` (live events)
-  - [ ] Subscribe `$SYS.ACCOUNT.>.DISCONNECT` (live events)
-  - [ ] Display `/subsz` (subscriptions)
-  - [ ] Display `/routez` (cluster routes, if clustered)
-- [ ] Rudimentary display: raw JSON acceptable for now
-- [ ] Test: UI shows live connection events
+- [x] Create `web/nats-manager/` directory structure
+- [x] Create simple HTTP server (Python) on port 4280
+- [x] Configure domain and CORS in `.env`
+  - [x] `NATS_MANAGER_DOMAIN=dev.nunet.one`
+  - [x] `NATS_MANAGER_CORS_ORIGINS` for allowed origins
+  - [x] `NATS_MANAGER_BIND` for interface binding
+- [x] Implement vanilla TS/JS component
+  - [x] Fetch and display `/varz` (server stats) from port 8223
+  - [x] Fetch and display `/connz` (connections) from port 8223
+  - [x] Display `/subsz` (subscriptions) from port 8223
+  - [x] Display current domain in UI header
+  - [x] WebSocket connection to NATS WSS (port 8443) - TLS enabled
+  - [ ] Subscribe `$SYS.ACCOUNT.>.CONNECT` (live events) - test WSS
+  - [ ] Subscribe `$SYS.ACCOUNT.>.DISCONNECT` (live events) - test WSS
+- [x] Document: HTTP API is read-only, config changes require file edit + reload
+- [x] Rudimentary display: raw JSON acceptable for now
+- [x] Script handles port conflicts (kills stale processes)
+- [ ] Test: UI shows live connection events - needs WebSocket fix
 
 ---
 

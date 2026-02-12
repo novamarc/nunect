@@ -1,0 +1,30 @@
+[592550] 2026/02/12 14:17:48.705918 [INF] Starting nats-server
+[592550] 2026/02/12 14:17:48.705983 [INF]   Version:  2.10.7
+[592550] 2026/02/12 14:17:48.705994 [INF]   Git:      [not set]
+[592550] 2026/02/12 14:17:48.706000 [INF]   Name:     nunect-dev
+[592550] 2026/02/12 14:17:48.706004 [INF]   Node:     WNVPitUc
+[592550] 2026/02/12 14:17:48.706007 [INF]   ID:       NB3LBHG2HIL3W7AXELOPAWU4T2KL6BXYTOFJ6TMAPDKS4LPND42V7IQG
+[592550] 2026/02/12 14:17:48.706014 [WRN] Plaintext passwords detected, use nkeys or bcrypt
+[592550] 2026/02/12 14:17:48.706022 [INF] Using configuration file: /home/caia/GitHub/nunect/config/nats-server-runtime.conf
+[592550] 2026/02/12 14:17:48.706612 [INF] Starting https monitor on 0.0.0.0:8444
+[592550] 2026/02/12 14:17:48.706677 [INF] Starting JetStream
+[592550] 2026/02/12 14:17:48.706799 [INF]     _ ___ _____ ___ _____ ___ ___   _   __  __
+[592550] 2026/02/12 14:17:48.706810 [INF]  _ | | __|_   _/ __|_   _| _ \ __| /_\ |  \/  |
+[592550] 2026/02/12 14:17:48.706814 [INF] | || | _|  | | \__ \ | | |   / _| / _ \| |\/| |
+[592550] 2026/02/12 14:17:48.706817 [INF]  \__/|___| |_| |___/ |_| |_|_\___/_/ \_\_|  |_|
+[592550] 2026/02/12 14:17:48.706819 [INF] 
+[592550] 2026/02/12 14:17:48.706821 [INF]          https://docs.nats.io/jetstream
+[592550] 2026/02/12 14:17:48.706824 [INF] 
+[592550] 2026/02/12 14:17:48.706826 [INF] ---------------- JETSTREAM ----------------
+[592550] 2026/02/12 14:17:48.706833 [INF]   Max Memory:      1.00 GB
+[592550] 2026/02/12 14:17:48.706838 [INF]   Max Storage:     10.00 GB
+[592550] 2026/02/12 14:17:48.706841 [INF]   Store Directory: "data/nats/jetstream"
+[592550] 2026/02/12 14:17:48.706844 [INF] -------------------------------------------
+[592550] 2026/02/12 14:17:48.707238 [INF] Listening for websocket clients on wss://0.0.0.0:8443
+[592550] 2026/02/12 14:17:48.707636 [INF] Listening for client connections on 0.0.0.0:4222
+[592550] 2026/02/12 14:17:48.707646 [INF] TLS required for client connections
+[592550] 2026/02/12 14:17:48.707968 [INF] Server is ready
+[592550] 2026/02/12 14:42:29.355878 [INF] Initiating Shutdown...
+[592550] 2026/02/12 14:42:29.355929 [INF] Initiating JetStream Shutdown...
+[592550] 2026/02/12 14:42:29.355940 [INF] JetStream Shutdown
+[592550] 2026/02/12 14:42:29.356074 [INF] Server Exiting..
