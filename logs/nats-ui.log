@@ -1409,3 +1409,11 @@
 127.0.0.1 - - [12/Feb/2026 18:46:04] "GET /api/varz HTTP/1.1" 200 -
 127.0.0.1 - - [12/Feb/2026 18:46:06] "GET /api/varz HTTP/1.1" 200 -
 127.0.0.1 - - [12/Feb/2026 18:46:06] "GET /api/connz HTTP/1.1" 200 -
+127.0.0.1 - - [12/Feb/2026 18:50:55] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [12/Feb/2026 18:51:38] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [12/Feb/2026 19:13:26] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [12/Feb/2026 19:13:27] "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - - [12/Feb/2026 19:13:27] code 404, message File not found
+127.0.0.1 - - [12/Feb/2026 19:13:27] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [12/Feb/2026 19:17:00] "GET /?token=Xs_8CLpiQv5QkFGHLYlhXhMPJZtzwnlEfTeYGITm_1Q HTTP/1.1" 200 -
+127.0.0.1 - - [12/Feb/2026 19:17:20] "GET / HTTP/1.1" 200 -
