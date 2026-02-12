@@ -16,12 +16,18 @@
         .status { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; }
         .status.ok { background: #373; }
         .status.error { background: #733; }
+        .status.warn { background: #773; }
         .event { padding: 5px; margin: 2px 0; background: #333; font-size: 0.9em; }
         .event.connect { border-left: 3px solid #7e7; }
         .event.disconnect { border-left: 3px solid #e77; }
-        table { width: 100%; border-collapse: collapse; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
         th, td { text-align: left; padding: 8px; border-bottom: 1px solid #444; }
         th { color: #7ee; }
+        .metric-good { color: #7e7; }
+        .metric-warn { color: #ee7; }
+        .metric-bad { color: #e77; }
+        .rtt-native { color: #7ee; }
+        .rtt-app { color: #e7e; }
         .note { background: #332; padding: 10px; border-left: 3px solid #fa0; margin: 10px 0; }
     </style>
 </head>
@@ -39,19 +45,32 @@
         <label>NATS WebSocket: <input type="text" id="wsUrl" value="{{NATS_WS_URL}}" style="width: 300px;"></label>
         <button class="refresh" onclick="reconnect()">Connect</button>
         <span id="connectionStatus" class="status error">Disconnected</span>
+        <span id="rttStatus" class="status" style="margin-left: 10px;">RTT: --</span>
     </div>
 
     <div class="grid">
         <div class="section">
-            <h2>Server Stats (/varz)</h2>
-            <button class="refresh" onclick="fetchVarz()">Refresh</button>
-            <pre id="varz">Loading configuration...</pre>
-        </div>
-
-        <div class="section">
             <h2>Connections (/connz)</h2>
             <button class="refresh" onclick="fetchConnz()">Refresh</button>
             <div id="connz">Loading configuration...</div>
+        </div>
+
+        <div class="section">
+            <h2>Client RTT Metrics</h2>
+            <button class="refresh" onclick="clearRTTMetrics()">Clear</button>
+            <span id="rttCount">0 clients</span>
+            <div id="rttMetrics" style="max-height: 300px; overflow-y: auto;">
+                <table>
+                    <tr>
+                        <th>Unit ID</th>
+                        <th>Seq</th>
+                        <th class="rtt-native">Native RTT</th>
+                        <th class="rtt-app">App RTT</th>
+                        <th>Last Seen</th>
+                    </tr>
+                </table>
+                <p class="note">Waiting for metrics from ops.metric.rtt.></p>
+            </div>
         </div>
     </div>
 
@@ -74,19 +93,25 @@
 
     <div class="grid">
         <div class="section">
+            <h2>Server Stats (/varz)</h2>
+            <button class="refresh" onclick="fetchVarz()">Refresh</button>
+            <pre id="varz">Loading configuration...</pre>
+        </div>
+
+        <div class="section">
             <h2>Routes/Gateways (/routez)</h2>
             <button class="refresh" onclick="fetchRoutez()">Refresh</button>
             <div id="routez">Loading...</div>
         </div>
+    </div>
 
+    <div class="grid">
         <div class="section">
             <h2>JetStream (/jsz)</h2>
             <button class="refresh" onclick="fetchJsz()">Refresh</button>
             <div id="jsz">Loading...</div>
         </div>
-    </div>
 
-    <div class="grid">
         <div class="section">
             <h2>Accounts</h2>
             <div id="accounts">
@@ -99,7 +124,9 @@
                 </table>
             </div>
         </div>
+    </div>
 
+    <div class="grid">
         <div class="section">
             <h2>Connection Activity</h2>
             <button class="refresh" onclick="clearActivity()">Clear</button>
@@ -118,6 +145,6 @@
             domain: "{{NATS_MANAGER_DOMAIN}}"
         };
     </script>
-    <script type="module" src="app.js?v=2"></script>
+    <script type="module" src="app.js?v=3"></script>
 </body>
 </html>

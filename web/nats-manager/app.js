@@ -2,6 +2,7 @@
  * nunect NATS Manager UI
  * 
  * Uses nats.ws library for proper WebSocket connectivity
+ * Implements RTT measurement pattern matching guardian and other clients
  */
 
 import { connect, StringCodec } from './node_modules/nats.ws/esm/nats.js';
@@ -12,6 +13,11 @@ let wsUrl = window.NUNECT_CONFIG?.natsWsUrl || 'wss://localhost:8443';
 let nc = null;  // NATS connection
 let sc = StringCodec();
 let eventCount = 0;
+
+// RTT Metrics tracking
+let rttMetrics = new Map(); // unit_id -> { native_rtt, app_rtt, sequence, last_seen }
+let rttCheckInterval = null;
+let unitId = 'nats-manager-ui'; // Our unit ID for echo responses
 
 // Initialize connection from injected config
 function initConfig() {
@@ -37,6 +43,25 @@ function setStatus(connected) {
     } else {
         status.textContent = 'Disconnected';
         status.className = 'status error';
+    }
+}
+
+// Update RTT display
+function updateRTTDisplay(rttMs) {
+    const rttStatus = document.getElementById('rttStatus');
+    if (rttMs === null) {
+        rttStatus.textContent = 'RTT: --';
+        rttStatus.className = 'status';
+    } else {
+        rttStatus.textContent = `RTT: ${rttMs.toFixed(1)}ms`;
+        // Color code based on latency
+        if (rttMs < 100) {
+            rttStatus.className = 'status ok';
+        } else if (rttMs < 300) {
+            rttStatus.className = 'status warn';
+        } else {
+            rttStatus.className = 'status error';
+        }
     }
 }
 
@@ -104,13 +129,130 @@ async function fetchSubsz() {
     }
 }
 
+// Format microseconds to human readable
+function formatMicroseconds(us) {
+    if (us === 0 || us === undefined) return '--';
+    if (us < 1000) return `${us}µs`;
+    if (us < 1000000) return `${(us / 1000).toFixed(2)}ms`;
+    return `${(us / 1000000).toFixed(2)}s`;
+}
+
+// Get color class based on latency
+function getLatencyClass(us, thresholdGood = 1000, thresholdWarn = 10000) {
+    if (us === 0 || us === undefined) return '';
+    if (us < thresholdGood) return 'metric-good';
+    if (us < thresholdWarn) return 'metric-warn';
+    return 'metric-bad';
+}
+
+// Update RTT metrics table display
+function updateRTTTable() {
+    const container = document.getElementById('rttMetrics');
+    const countEl = document.getElementById('rttCount');
+    
+    if (rttMetrics.size === 0) {
+        container.innerHTML = `
+            <table>
+                <tr>
+                    <th>Unit ID</th>
+                    <th>Seq</th>
+                    <th class="rtt-native">Native RTT</th>
+                    <th class="rtt-app">App RTT</th>
+                    <th>Last Seen</th>
+                </tr>
+            </table>
+            <p class="note">Waiting for metrics from ops.metric.rtt.></p>
+        `;
+        countEl.textContent = '0 clients';
+        return;
+    }
+    
+    let html = `
+        <table>
+            <tr>
+                <th>Unit ID</th>
+                <th>Seq</th>
+                <th class="rtt-native">Native RTT</th>
+                <th class="rtt-app">App RTT</th>
+                <th>Last Seen</th>
+            </tr>
+    `;
+    
+    // Sort by last seen (most recent first)
+    const sorted = Array.from(rttMetrics.entries()).sort((a, b) => b[1].last_seen - a[1].last_seen);
+    
+    for (const [unitId, data] of sorted) {
+        const age = Date.now() - data.last_seen;
+        const ageStr = age < 60000 ? `${Math.floor(age / 1000)}s ago` : `${Math.floor(age / 60000)}m ago`;
+        const nativeClass = getLatencyClass(data.native_rtt, 500, 5000); // <500us good, <5ms warn
+        const appClass = getLatencyClass(data.app_rtt, 1000, 10000);    // <1ms good, <10ms warn
+        
+        html += `
+            <tr>
+                <td>${unitId}</td>
+                <td>${data.sequence}</td>
+                <td class="${nativeClass} rtt-native">${formatMicroseconds(data.native_rtt)}</td>
+                <td class="${appClass} rtt-app">${formatMicroseconds(data.app_rtt)}</td>
+                <td>${ageStr}</td>
+            </tr>
+        `;
+    }
+    
+    html += '</table>';
+    container.innerHTML = html;
+    countEl.textContent = `${rttMetrics.size} client${rttMetrics.size !== 1 ? 's' : ''}`;
+}
+
+// Clear RTT metrics
+function clearRTTMetrics() {
+    rttMetrics.clear();
+    updateRTTTable();
+}
+
+// Handle incoming RTT metric
+function handleRTTMetric(data) {
+    const unitId = data.unit_id;
+    if (!unitId) return;
+    
+    rttMetrics.set(unitId, {
+        native_rtt: data.native_rtt_us,
+        app_rtt: data.app_rtt_us,
+        sequence: data.seq,
+        timestamp: data.ts,
+        last_seen: Date.now()
+    });
+    
+    updateRTTTable();
+}
+
+// Measure our own RTT (like guardian does)
+async function measureOwnRTT() {
+    if (!nc) return;
+    
+    try {
+        // Try to measure app-level RTT using echo pattern
+        // First check if there's an echo service for ourselves
+        const echoSubject = `ops.echo.${unitId}`;
+        const start = performance.now();
+        
+        try {
+            await nc.request(echoSubject, sc.encode('ping'), { timeout: 2000 });
+            const appRTT = performance.now() - start;
+            updateRTTDisplay(appRTT);
+        } catch (e) {
+            // No echo responder for us, just show connected
+            updateRTTDisplay(null);
+        }
+    } catch (e) {
+        // Ignore errors
+    }
+}
+
 // Connect to NATS via WebSocket using nats.ws library
 async function connectNATS() {
     try {
         addEvent(`Connecting to NATS at ${wsUrl}...`, 'info');
         
-        // Parse the WebSocket URL to get server address
-        // wss://wss.nunet.one:8443 -> wss://wss.nunet.one:8443
         const serverUrl = wsUrl;
         
         nc = await connect({
@@ -120,11 +262,33 @@ async function connectNATS() {
             maxReconnectAttempts: 10,
             user: 'admin',
             pass: 'changeit',
+            name: unitId, // Identify ourselves
         });
         
         console.log('NATS connected:', nc.getServer());
         addEvent('NATS WebSocket connected', 'connect');
         setStatus(true);
+        
+        // Subscribe to RTT metrics from all clients
+        const rttSub = nc.subscribe('ops.metric.rtt.>');
+        (async () => {
+            for await (const msg of rttSub) {
+                try {
+                    const data = JSON.parse(sc.decode(msg.data));
+                    handleRTTMetric(data);
+                } catch (e) {
+                    // Invalid JSON, ignore
+                }
+            }
+        })();
+        
+        // Subscribe to heartbeats to show activity
+        const hbSub = nc.subscribe('ops.heartbeat.>');
+        (async () => {
+            for await (const msg of hbSub) {
+                // Heartbeat received, could update last-seen if we track heartbeats separately
+            }
+        })();
         
         // Subscribe to $SYS events
         const sub = nc.subscribe('$SYS.>');
@@ -139,11 +303,32 @@ async function connectNATS() {
             }
         })();
         
+        // Setup echo responder for ourselves (so other clients can measure RTT to us)
+        const echoSub = nc.subscribe(`ops.echo.${unitId}`);
+        (async () => {
+            for await (const msg of echoSub) {
+                // Echo back immediately
+                if (msg.respond) {
+                    msg.respond(msg.data);
+                }
+            }
+        })();
+        
+        // Start periodic RTT measurement
+        if (rttCheckInterval) clearInterval(rttCheckInterval);
+        rttCheckInterval = setInterval(measureOwnRTT, 5000);
+        measureOwnRTT(); // Measure immediately
+        
         // Handle disconnect
         nc.closed().then(() => {
             console.log('NATS connection closed');
             addEvent('NATS disconnected', 'disconnect');
             setStatus(false);
+            updateRTTDisplay(null);
+            if (rttCheckInterval) {
+                clearInterval(rttCheckInterval);
+                rttCheckInterval = null;
+            }
         });
         
     } catch (err) {
@@ -154,6 +339,7 @@ async function connectNATS() {
         addEvent('  2. Cloudflare route wss.nunet.one -> localhost:8443 is active', 'error');
         addEvent('  3. Certificates are valid', 'error');
         setStatus(false);
+        updateRTTDisplay(null);
     }
 }
 
@@ -373,3 +559,4 @@ window.fetchRoutez = fetchRoutez;
 window.fetchJsz = fetchJsz;
 window.clearEvents = clearEvents;
 window.clearActivity = clearActivity;
+window.clearRTTMetrics = clearRTTMetrics;
