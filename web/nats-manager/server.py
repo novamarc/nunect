@@ -38,16 +38,22 @@ DIRECTORY = Path(__file__).parent
 NATS_API_URL = f"https://localhost:{NATS_HTTPS_PORT}"
 
 
-def get_nats_urls(host):
+def get_nats_urls(host, is_cloudflare=False):
     """Generate NATS URLs for the client"""
-    nats_ws_port = os.environ.get('NATS_WS_PORT', '8443')
+    nats_ws_domain = os.environ.get('NATS_WS_DOMAIN', host)
     
     if host == 'localhost' or host == '127.0.0.1':
         http_url = f"http://localhost:{PORT}/api"
-        ws_url = f"wss://localhost:{nats_ws_port}"
+        ws_url = f"wss://localhost:8443"
     else:
-        http_url = f"https://{host}:{PORT}/api"
-        ws_url = f"wss://{host}:{nats_ws_port}"
+        # When behind Cloudflare, use relative URL for API (no port)
+        # Cloudflare proxies port 443 to localhost:4280
+        if is_cloudflare:
+            http_url = "/api"  # Relative URL - browser will use same host:port
+        else:
+            http_url = f"https://{host}:{PORT}/api"
+        # WebSocket uses separate subdomain via Cloudflare (port 443)
+        ws_url = f"wss://{nats_ws_domain}"
     
     return {'http_url': http_url, 'ws_url': ws_url}
 
@@ -120,10 +126,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         
         content = index_path.read_text()
-        urls = get_nats_urls(host)
+        
+        # Detect if behind Cloudflare (CF-RAY header present)
+        is_cloudflare = self.headers.get('CF-RAY') is not None
+        if is_cloudflare:
+            print(f"Cloudflare detected for host: {host}")
+        
+        urls = get_nats_urls(host, is_cloudflare)
         
         content = content.replace('"{{NATS_HTTP_URL}}"', f'"{urls["http_url"]}"')
         content = content.replace('"{{NATS_WS_URL}}"', f'"{urls["ws_url"]}"')
+        content = content.replace('"{{NATS_MANAGER_DOMAIN}}"', f'"{DOMAIN}"')
         content = content.replace('value="{{NATS_HTTP_URL}}"', f'value="{urls["http_url"]}"')
         content = content.replace('value="{{NATS_WS_URL}}"', f'value="{urls["ws_url"]}"')
         
@@ -135,12 +148,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     
     def add_cors_headers(self):
         origin = self.headers.get('Origin', '')
+        # Debug: print what we received
+        # print(f"CORS: Origin={origin}, Allowed={ALLOWED_ORIGINS}")
+        
         if '*' in ALLOWED_ORIGINS:
             self.send_header('Access-Control-Allow-Origin', '*')
         elif origin in ALLOWED_ORIGINS:
             self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin')
+        elif any(o.endswith('.nunet.one') for o in ALLOWED_ORIGINS):
+            # Allow any subdomain of nunet.one
+            if origin.endswith('.nunet.one'):
+                self.send_header('Access-Control-Allow-Origin', origin)
+                self.send_header('Vary', 'Origin')
+        
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
     
     def end_headers(self):
         self.add_cors_headers()

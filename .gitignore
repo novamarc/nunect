@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Generated config
+config/nats-server-runtime.conf
+
+# Runtime data
+*.pid
+*.log
+logs/
+
+# Certificates (user-managed, don't commit)
+*.pem
+*.key
+config/certs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+dist/
+build/

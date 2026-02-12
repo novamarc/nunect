@@ -1,27 +1,17 @@
 /**
  * nunect NATS Manager UI
  * 
- * Fetches from NATS HTTP Monitoring API (read-only)
- * Connects via WebSocket for live $SYS events
+ * Uses nats.ws library for proper WebSocket connectivity
  */
 
-// Configuration (injected by server from .env)
-let apiUrl = window.NUNECT_CONFIG?.natsHttpUrl || 'http://localhost:8223';
-let wsUrl = window.NUNECT_CONFIG?.natsWsUrl || 'ws://localhost:4223';
-let ws = null;
-let eventCount = 0;
+import { connect, StringCodec } from './node_modules/nats.ws/esm/nats.js';
 
-// Update status indicator
-function setStatus(connected) {
-    const status = document.getElementById('connectionStatus');
-    if (connected) {
-        status.textContent = 'Connected';
-        status.className = 'status ok';
-    } else {
-        status.textContent = 'Disconnected';
-        status.className = 'status error';
-    }
-}
+// Configuration (injected by server from .env)
+let apiUrl = window.NUNECT_CONFIG?.natsHttpUrl || 'https://localhost:4280/api';
+let wsUrl = window.NUNECT_CONFIG?.natsWsUrl || 'wss://localhost:8443';
+let nc = null;  // NATS connection
+let sc = StringCodec();
+let eventCount = 0;
 
 // Initialize connection from injected config
 function initConfig() {
@@ -38,6 +28,18 @@ function initConfig() {
     document.getElementById('domainDisplay').textContent = `(${display})`;
 }
 
+// Update status indicator
+function setStatus(connected) {
+    const status = document.getElementById('connectionStatus');
+    if (connected) {
+        status.textContent = 'Connected';
+        status.className = 'status ok';
+    } else {
+        status.textContent = 'Disconnected';
+        status.className = 'status error';
+    }
+}
+
 // Manual connect (when user changes inputs)
 function connect() {
     apiUrl = document.getElementById('apiUrl').value;
@@ -45,9 +47,10 @@ function connect() {
     
     // Test HTTP connection
     fetchVarz();
+    fetchConnz();
     
-    // Connect WebSocket
-    connectWebSocket();
+    // Connect WebSocket via NATS library
+    connectNATS();
 }
 
 // Fetch server stats
@@ -101,57 +104,53 @@ async function fetchSubsz() {
     }
 }
 
-// WebSocket connection for $SYS events
-function connectWebSocket() {
-    if (ws) {
-        ws.close();
-    }
-    
-    // Note: This is a raw WebSocket to NATS
-    // In production, you'd use the NATS JavaScript client library
-    // For now, we show the concept - real impl needs NATS WS gateway or nats.ws library
-    
+// Connect to NATS via WebSocket using nats.ws library
+async function connectNATS() {
     try {
-        ws = new WebSocket(wsUrl);
+        addEvent(`Connecting to NATS at ${wsUrl}...`, 'info');
         
-        ws.onopen = () => {
-            console.log('WebSocket connected');
-            addEvent('WebSocket connected', 'info');
-            
-            // Send CONNECT protocol message
-            // This is simplified - real NATS protocol is more complex
-            const connectMsg = {
-                verbose: false,
-                pedantic: false,
-                user: 'admin',
-                pass: 'changeit'
-            };
-            ws.send(`CONNECT ${JSON.stringify(connectMsg)}`);
-            
-            // Subscribe to $SYS events
-            setTimeout(() => {
-                ws.send('SUB $SYS.> 1');
-            }, 100);
-        };
+        // Parse the WebSocket URL to get server address
+        // wss://wss.nunet.one:8443 -> wss://wss.nunet.one:8443
+        const serverUrl = wsUrl;
         
-        ws.onmessage = (event) => {
-            console.log('WS message:', event.data);
-            addEvent(event.data, 'message');
-        };
+        nc = await connect({
+            servers: [serverUrl],
+            timeout: 10000,
+            reconnectTimeWait: 2000,
+            maxReconnectAttempts: 10,
+            user: 'admin',
+            pass: 'changeit',
+        });
         
-        ws.onerror = (err) => {
-            console.error('WebSocket error:', err);
-            addEvent('WebSocket error - check console', 'error');
+        console.log('NATS connected:', nc.getServer());
+        addEvent('NATS WebSocket connected', 'connect');
+        setStatus(true);
+        
+        // Subscribe to $SYS events
+        const sub = nc.subscribe('$SYS.>');
+        (async () => {
+            for await (const msg of sub) {
+                const data = sc.decode(msg.data);
+                console.log('NATS message:', msg.subject, data);
+                addEvent(`[${msg.subject}] ${data.substring(0, 100)}`, 'message');
+            }
+        })();
+        
+        // Handle disconnect
+        nc.closed().then(() => {
+            console.log('NATS connection closed');
+            addEvent('NATS disconnected', 'disconnect');
             setStatus(false);
-        };
+        });
         
-        ws.onclose = () => {
-            console.log('WebSocket closed');
-            addEvent('WebSocket disconnected', 'info');
-            setStatus(false);
-        };
     } catch (err) {
-        addEvent(`WebSocket failed: ${err.message}`, 'error');
+        console.error('NATS connection error:', err);
+        addEvent(`NATS error: ${err.message}`, 'error');
+        addEvent('Check that:', 'error');
+        addEvent('  1. NATS server is running with WebSocket enabled', 'error');
+        addEvent('  2. Cloudflare route wss.nunet.one -> localhost:8443 is active', 'error');
+        addEvent('  3. Certificates are valid', 'error');
+        setStatus(false);
     }
 }
 
@@ -188,7 +187,9 @@ setInterval(() => {
 // Initial load
 window.addEventListener('DOMContentLoaded', () => {
     initConfig();
-    connect();
+    fetchVarz();
+    fetchConnz();
+    connectNATS();
 });
 
 // Export for global access

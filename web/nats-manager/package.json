@@ -1,0 +1,15 @@
+{
+  "name": "nunect-nats-manager",
+  "version": "1.0.0",
+  "description": "NATS Manager UI for nunect",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild app.ts --bundle --outfile=app.js --format=esm"
+  },
+  "dependencies": {
+    "nats.ws": "^1.30.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
+  }
+}
