@@ -1,0 +1,225 @@
+### Voice Packet/Frame Durations in Modern Digital Radio Standards
+
+Based on your setup with NATS for low-latency voice (Opus at 8 kbps, aiming for 20-30 ms packets tied to sample lengths for compatibility with DMR/TETRA translation, muting, transcription, and logging in a SignalK Rust backbone), here's a breakdown of the voice packet lengths (audio duration per transmitted burst or frame) in the standards you mentioned. These are digital mobile radio protocols for public safety, maritime, and professional use. I focused on the audio sample duration per "package" (e.g., TDMA slot or FDMA frame), as that's closest to your NATS packet concept—typically larger than raw vocoder frames (often 20 ms) due to FEC, headers, and transmission efficiency.
+
+Values are derived from standard specs (ETSI for DMR/TETRA, APCO for P25, ITU-R for d-VHF/GMDSS). Note: These are for voice; data/logging modes vary. Actual RTT includes codec delay + network, but your 120 ms via WSS is solid—NATS should shave that with its lightweight headers/subjects.
+
+| Standard | Description | Channel Bandwidth & Access | Vocoder/Codecs | Audio Duration per Packet/Frame | Notes |
+|----------|-------------|----------------------------|---------------|---------------------------------|-------|
+| **DMR (Digital Mobile Radio)** | Tier II/III standard for professional/commercial radio, used in public safety. 2-slot TDMA for efficiency. | 12.5 kHz, TDMA (6.25 kHz equiv. per slot). Data rate: 9,600 bps total. | AMBE+2 (3,600 bps with FEC; raw voice ~2,450 bps). Vocoder frames: 20 ms. | 60 ms of audio per TDMA slot/burst (30 ms transmission time). Superframe: 360 ms (6 bursts). | Each burst carries 3x20 ms vocoder frames (216 voice bits). Matches your 20-30 ms goal if subdivided, but standard packets are 60 ms for low overhead. Great for translation to Opus.   |
+| **TETRA (Terrestrial Trunked Radio)** | European standard for trunked radio in public safety/government. 4-slot TDMA for high capacity. | 25 kHz, TDMA (6.25 kHz equiv. per slot). Data rate: 36 kbps total (7.2 kbps per slot). | ACELP (~4,567 bps). Vocoder frames: 30 ms. | 30 ms of audio per TDMA slot (14.167 ms transmission time). Multiframe: 1.02 s (18 frames of 56.667 ms each). | Slot payload optimized for voice + data. Shorter than DMR, closer to your 20-30 ms packets—ideal for low-latency NATS.   |
+| **P25 (Project 25/APCO-25)** | US standard for public safety interoperable radio. Phase 1: FDMA; Phase 2: TDMA for doubled capacity. | Phase 1: 12.5 kHz FDMA (9,600 bps). Phase 2: 12.5 kHz TDMA (6 kHz equiv. per slot; 12 kbps downlink). | Phase 1: IMBE (7,200 bps with FEC). Vocoder frames: 20 ms. Phase 2: AMBE+2 half-rate (3,600 bps). | Phase 1: 180 ms of audio per LDU (Logical Data Unit; ~172 ms transmission). Phase 2: 60 ms of audio per TDMA slot/burst (30 ms transmission). Superframe: 360 ms. | Phase 2 mirrors DMR (good for your perf client RTT calcs). Use Phase 2 for modern setups.    |
+| **d-VHF (Digital VHF for GMDSS)** | Emerging ITU/IMO standard for digital voice in maritime VHF (Global Maritime Distress and Safety System). Based on dPMR/NXDN or similar for digitizing analog channels. | 25 kHz (analog compatible), often subdivided to 6.25 kHz FDMA/TDMA for 4+ channels. Data rate: ~4,800 bps per sub-channel. | AMBE+2 (3,600 bps) or ITU-T (e.g., G.729 at 8 kbps; frames: 20 ms). Alternatives: Opus/G.711. | 20-30 ms of audio per vocoder frame (transmission packet ~ aligned to 20-60 ms, depending on TDMA). Slot/burst: Inferred ~208 μs/symbol, but full packets vary (e.g., with slow-data for position). | Still evolving (ITU-R M.2530); focuses on voice + data (e.g., MMSI addressing). Matches your 20-30 ms target closely for GMDSS translation/logging in SignalK. Use 20 ms for Opus compatibility.     |
+
+For your NATS web client: Stick to 20-30 ms packets (e.g., Opus frames) for alignment with these vocoders— it'll minimize jitter in translation/muting/transcription while keeping RTT low (your 120 ms baseline via WSS is beatable with NATS' subjects/headers). If logging to SignalK in Rust, encode timestamps per packet for RTT calcs. NATS is perfect here—lightweight and extensible. If you need code snippets for Opus/NATS integration or Rust SignalK tweaks, just share more details.
+
+Yes, your understanding aligns well with how these standards behave in practice for routing/metadata exposure, even when encryption is enabled. In your NATS-based system (piggybacking on DMR/TETRA/P25/etc. as backbone delivery, extracting only the target ID/source/group for subject-based routing to transcription, web clients, or cross-translation), the good news is that **routing info (source ID, destination/talkgroup ID, call type, etc.) is almost always transmitted in the clear** — unencrypted — across these protocols. This makes it feasible to extract what you need for NATS subjects without decrypting the voice payload itself.
+
+Here's a clear breakdown per standard, focused on your question about headers/metadata vs. payload, and whether encrypted transmissions still leak routing info:
+
+| Standard | Encryption Scope | Is Header / Signaling / Routing Info Encrypted? | Does Encrypted Transmission Leak Routing Info (Source/Dest ID, Talkgroup, etc.)? | Notes for Your NATS Routing Use Case |
+|----------|------------------|------------------------------------------------|-------------------------------------------------------------|-------------------------------------|
+| **DMR** | Primarily **voice payload** (and sometimes data). Header/signaling is **not encrypted** in standard modes (Basic/Enhanced/ARC4/AES). Even in "Full Encrypt" or advanced modes (e.g., Hytera over-the-air), core metadata like source/destination IDs, talkgroup, slot info remains visible. | No — headers are clear. | Yes — always leaks source Radio ID, destination/talkgroup, call type, etc. You can route based on these without decrypting voice. | Perfect for your setup: Parse the unencrypted header to get target ID → map to NATS subject. Voice payload stays encrypted/opaque (just forward as-is or drop for web client/transcription if needed). No need for keys. |
+| **TETRA** | **Air interface encryption** (TEA1–TEA7) can cover signaling, identities, control messages, and payload — but in practice, many implementations leave **MAC/LLC headers** partially unencrypted (e.g., to indicate encryption state, slot allocation). Source/destination addresses are often visible in cleartext headers or partial signaling even on encrypted channels. Recent flaws (e.g., 2TETRA:2BURST) highlight that unencrypted prefixes/mac headers contain destination info. | Partially — some signaling/headers remain unencrypted or inferable. | Yes — frequently leaks destination/source IDs or call identifiers in headers, even on encrypted links. Radios accept unencrypted downlink traffic in some cases. | Still usable for routing: Extract target/group from visible signaling. For full privacy modes, it might obscure more, but standard air interface often exposes enough for subject mapping. |
+| **P25** | **Voice payload** encrypted (DES/AES), but **signaling/control** (including headers, Link Control Word, NID) is **unencrypted** in current standards. Unit IDs (source/dest), talkgroup, NAC, MFID, etc., are sent in clear. Link Layer Encryption (LLE) is in development to fix this, but not widely deployed yet. | No — headers/signaling clear (always unencrypted in deployed systems). | Yes — always leaks source Unit ID, Destination ID/talkgroup, call type, etc. Even encrypted voice frames have clear headers indicating originator/target. | Ideal for your needs: Headers give you routing info freely. Payload can stay encrypted; you route via NATS subjects based on clear IDs. Future LLE might hide this, but current real-world P25 exposes it. |
+
+### Key Takeaways for Your Architecture
+- **Yes, they give routing info away** — even when voice is encrypted. The standards prioritize reliable delivery/routing over hiding metadata (source/dest IDs are essential for radios to know "is this for me?"). Headers/signaling are designed to be readable by all receivers for synchronization, access control, etc.
+- **Variable payload length in NATS** — spot on. You'll likely end up with:
+  - Delimiters or NATS headers/subjects for: codec (e.g., AMBE+/Opus), bitrate, data type (voice/data/control), original standard (DMR/TETRA/etc.).
+  - Payload: raw bytes (encrypted or clear), length tied to ~20-60 ms samples for low jitter.
+  - Subject: Derived purely from unencrypted routing fields (e.g., `voice.dmr.target.<destID>`, `voice.tetra.group.<talkgroup>`, or `transcribe.from.dmr.<sourceID>`).
+- This keeps your web client (Opus 8 kbps, 20-30 ms packets), transcription/muting pipeline, and logging (SignalK Rust) decoupled from needing decryption keys — you only route/forward based on clear metadata.
+- For cross-translation (e.g., web client voice → DMR): Extract target from incoming packet → repackage as DMR-like payload with correct unencrypted header info → publish to NATS subject that bridges to the DMR backbone.
+
+Your setup sounds very performant already (120 ms RTT via WSS/Cloudflare is impressive for a homelab upstream), and leaning on these clear-metadata properties makes it robust without breaking encryption where it matters (voice privacy).
+
+
+Yes, NATS subjects are hierarchical (dot-separated tokens like `a.b.c.d`), and the way you structure the hierarchy **does matter** for performance, especially at scale with many subjects, wildcards, consumers, or JetStream streams. The short answer: **most specific first** (broad-to-narrow) is generally **not** the way to go for optimal routing efficiency — the opposite (broad/narrow-to-specific) usually wins for real-world use.
+
+### Recommended Hierarchy Direction: Broad → Specific (Least Specific First)
+
+This is the dominant best practice in NATS docs, community examples, and performance discussions:
+
+- Start with the **general namespace / domain** (least specific) on the left.
+- Get progressively more specific toward the right.
+
+Examples from official docs and real patterns:
+- `time.us.east.atlanta` (not `atlanta.east.us.time`)
+- `orders.created.us.region1.customer42` (not `customer42.region1.us.created.orders`)
+- `factory.1.area.2.machine.17.status.temperature` (broad factory → specific sensor)
+- `voice.dmr.tg.12345.source.6789` (your radio use: broad protocol → talkgroup → source)
+
+Why this direction minimizes resources / maximizes efficiency:
+
+1. **Wildcard Matching & Subscription Efficiency**  
+   NATS uses an internal radix/Patricia tree (trie-like) for subject matching.  
+   - Subscribers often use wildcards like `voice.dmr.tg.*` (catch all talkgroups) or `voice.*.tg.12345` (all protocols for one group).  
+   - When the common prefix is on the left (broad first), the tree branches later → fewer nodes traversed for common wildcards → faster lookups, less memory for shared prefixes.  
+   - If you reverse it (most specific first), every message starts with a unique token → the tree becomes very wide/flat early → more memory, slower matching for broad subscriptions.
+
+2. **JetStream Stream & Consumer Performance**  
+   - Streams bind to subject patterns (e.g., `voice.dmr.>` or `voice.*.tg.*`).  
+   - Broad prefixes let one stream capture many related subjects efficiently (shared indexing).  
+   - Consumers with filters like `voice.dmr.tg.12345.>` can quickly skip irrelevant parts.  
+   - Anti-pattern warning (from Synadia blogs): Too many disjoint / unrelated subjects per consumer/stream causes high indexing overhead. Broad-to-specific keeps related things grouped.
+
+3. **Routing & Fan-Out**  
+   - Publishers send to specific subjects (literal, no wildcards).  
+   - The server matches against all subscriptions. Broad prefixes help cluster similar traffic → better cache locality in the server's subject distributor.
+
+4. **Human & Maintenance Wins**  
+   - Easier to read/understand: `protocol.standard.talkgroup.source.type` flows naturally left-to-right.  
+   - Easier to add levels later without breaking wildcards (e.g., insert `region` as `voice.eu.dmr.tg.…`).
+
+### Your Radio / Voice Use Case – Suggested High-Level Structure
+
+Since you're mapping radio standards (DMR, TETRA, P25, etc.) and routing mostly on target/group ID:
+
+- Broad-to-specific example:
+  ```
+  voice.<standard>.<calltype>.<targetID>.<sourceID>.<codec>.<direction>
+  ```
+  - `voice.dmr.group.12345.source.6789.opus.downlink`
+  - `voice.tetra.individual.999.source.111.ambe.uplink`
+  - `voice.p25.tg.5000.*.transcribed.log` (for logging/transcription)
+
+- Wildcard-friendly subscriptions:
+  - All DMR: `voice.dmr.>`
+  - Specific talkgroup: `voice.dmr.group.12345.>`
+  - All transcriptions: `voice.*.*.*.*.*.transcribed`
+  - Web client downlink: `voice.*.*.*.*.opus.downlink`
+
+- KV/headers/DB mapping: Store the "subject-key-type" rules in a DB/CSV (e.g., standard → position in hierarchy, ID fields), then generate subjects dynamically in Rust. NATS doesn't care about order semantically — only about the dot hierarchy for matching.
+
+### Quick Rules of Thumb for Minimal Resources
+- Keep tokens ≤ 16 max (docs recommend reasonable limit).
+- Use lowercase, dots only (no uppercase/camelCase unless needed).
+- Avoid starting with `$` (reserved).
+- Test with `nats sub` or your perf client: Measure match time / memory with broad vs. reversed hierarchies if you hit high scale.
+- For JetStream: One stream per major domain (e.g., `VOICE` stream with subjects `voice.>`) → efficient storage/indexing.
+
+
+ with the layering:
+
+- NATS **headers** operate **only at the message layer** (the pub/sub delivery envelope).
+- They are **not part of the indexing/routing layer** (that's purely the **subject** — hierarchical, trie-optimized for fast wildcard matching).
+- They are **not part of the storage/data layer** (that's the payload bytes in JetStream streams — headers are stored alongside but separately).
+
+This separation is intentional and keeps performance high.
+
+### Native (Server-Recognized) Headers vs. Custom Headers
+
+NATS distinguishes two categories:
+
+1. **Native / Reserved Headers** (prefixed with `Nats-` or specific known names like `Nats-Msg-Id`, `Nats-Expected-Stream-Sequence`, etc.)
+   - These are interpreted and acted upon by the NATS server itself (core or JetStream).
+   - Examples (from docs):
+     - `Nats-Msg-Id` → enables de-duplication in streams.
+     - `Nats-Expected-Stream-Sequence` / `Nats-Expected-Last-Subject-Sequence` → optimistic concurrency / dedup checks.
+     - `Nats-Rollup` / `Nats-Rollup-Subject` → for KV rollup compaction.
+     - `Nats-Time-Stamp` / tracing ones (`traceparent`, `Nats-Trace-Dest`) → metadata for republish, direct-get, sources/mirrors.
+     - Flow control, batch markers, internal API ones.
+   - The server **parses and uses** these — they trigger specific behaviors (e.g., reject publish if sequence mismatch).
+
+2. **Custom / Application Headers** (anything else, e.g., `X-Codec: opus`, `X-Source-Radio: dmr-tg-12345`, `X-Direction: downlink`)
+   - Completely ignored by the NATS server — treated as opaque key-value pairs (multi-value supported, like HTTP).
+   - Passed through untouched from publisher → subscriber.
+   - Stored in JetStream alongside the message (if persisted).
+   - Accessible via client libs (`msg.Headers`, `msg.Header.Get("X-Foo")`, etc.).
+
+**Reserved namespace rule**: Avoid starting your custom keys with `Nats-` (or `nats-`) — that's for server use. Use your own prefix (e.g., `App-`, `Voice-`, `X-`) to stay safe.
+
+### Performance Impact of Headers
+
+Headers add very little overhead — NATS is designed for them since 2.2+ (they're part of the core protocol via `HPUB`/`HMSG` messages).
+
+- **Wire / Network overhead**:
+  - Headers are sent as a simple text block before the payload: `NATS/1.0\r\nKey: value\r\nAnother: multi\r\n  value\r\n\r\n` (CRLF delimited, like HTTP).
+  - Typical: 50–300 bytes extra for 5–15 headers (very small compared to your Opus 8 kbps ~20–60 ms packets, which are ~20–60 bytes raw).
+  - Negligible on modern networks (your 25 Mbit upstream laughs at it).
+
+- **Server processing / Memory**:
+  - Parsing is fast (simple text scan).
+  - Storage in JetStream: headers are kept separately from payload (efficient binary encoding) — adds tiny per-message overhead (~few KB total per 10k msgs even with verbose headers).
+  - No indexing cost — subjects handle all routing/filtering; headers are **not** indexed or queried server-side (except for the few native ones like dedup).
+  - At high scale (millions msgs/sec), headers barely register — NATS benchmarks show headers-enabled paths within 1–5% of no-headers throughput (often <1% difference).
+
+- **Client-side**:
+  - Rust/Go/etc. clients parse them efficiently (hashmap-like access).
+  - If you're doing heavy header manipulation in hot paths → minor cost, but still microseconds.
+
+- **When it could hurt (rare)**:
+  - Extremely large headers (thousands of bytes or hundreds of keys) → parsing/storage balloons (avoid — keep under ~1–2 KB total).
+  - Overusing native headers unnecessarily → server does extra work (e.g., dedup checks).
+  - Very high fan-out with many consumers reading headers → but that's app logic, not NATS.
+
+In your voice/radio use case:
+- Stick to custom headers for codec, data rate, data type, original standard, direction, etc.
+- Use subject for routing (broad-to-specific as discussed).
+- Headers = metadata envelope → perfect for variable payload without polluting the subject or forcing payload parsing on every hop.
+- For logging/SignalK → extract headers once, enrich with timestamps/RTT calcs, then store/forward.
+
+Bottom line: Headers are lightweight, message-layer only, and won't hammer performance unless abused. Native ones give you free server features (dedup, tracing); custom ones give you full flexibility with almost zero cost.
+
+
+Yes, exactly — you've nailed the clean separation that makes NATS so powerful and performant for your use case:
+
+- **Subjects**  
+  → Primary for **routing** (who gets the message via wildcards/subscriptions)  
+  → Primary for **storage scoping** in JetStream (what goes into which stream, what consumers can filter on)  
+  → Hierarchical, indexed efficiently in a trie, cheap to match even at massive scale  
+  → Should contain the "where / to whom / category" info (broad → specific as we discussed)
+
+- **Headers**  
+  → Pure **metadata envelope** (codec, bitrate, data type, direction, original radio standard, timestamps, etc.)  
+  → Not used for routing or storage decisions by the server  
+  → Passed through unchanged, low overhead, application-level only  
+  → Perfect for variable, descriptive info that doesn't need to influence subject matching or stream binding
+
+In short:
+
+| Purpose                  | Use Subjects                          | Use Headers                              |
+|--------------------------|---------------------------------------|------------------------------------------|
+| Decide who receives msg  | Yes (core mechanism)                  | No                                       |
+| Scope JetStream streams  | Yes (subject patterns define inclusion) | No                                       |
+| Consumer filtering       | Yes (filter_subject on consumers)     | No (consumers can't filter on headers)   |
+| Carry codec / format info| No (keep subjects clean)              | Yes                                      |
+| Carry routing keys (IDs) | Yes (if needed for broad categories)  | Optional (if you prefer not polluting subject) |
+| Carry timestamps / RTT   | Possible (but bloats subject)         | Yes (better fit)                         |
+| Overhead at scale        | Very low (trie-optimized)             | Very low (simple text block)             |
+
+### Practical rule of thumb for your radio/voice system
+- Put in **subject** anything that:
+  - Defines routing paths (protocol, call type, target/group ID, source if you fan-out by origin)
+  - You want to wildcard-subscribe on (e.g., all DMR talkgroups, all transcriptions)
+  - You want JetStream to automatically group/store by
+
+- Put in **headers** anything that:
+  - Describes the content (codec, sample length, bitrate, encryption status, direction uplink/downlink)
+  - Is variable or changes per message
+  - Is only needed by the final consumer (web client, transcription service, logger)
+  - Doesn't need to drive routing decisions
+
+Example for a DMR voice packet going to a web client:
+
+```text
+Subject: voice.dmr.group.12345.downlink
+
+Headers:
+  X-Codec: opus
+  X-Bitrate: 8000
+  X-Sample-Ms: 20
+  X-Source-Radio: 6789
+  X-Original-Standard: dmr
+  X-Encrypted-Payload: true
+  X-Timestamp-Sent: 2026-02-13T12:34:56.789Z
+```
+
+This keeps subjects lean and wildcard-friendly while headers carry the rich, per-packet details without affecting routing cost.
+
+You're in a great spot — this split will make debugging, scaling, and adding features (like muting, translation, logging to SignalK) much easier down the line.
+
+If you want to brainstorm a concrete subject + header template for one or two flows (e.g., DMR → transcription, web → TETRA), or anything else, just drop it. Otherwise, sounds like you're good to start the tedious mapping part whenever you're ready. 😄
+
+
