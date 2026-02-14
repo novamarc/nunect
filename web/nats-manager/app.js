@@ -18,8 +18,40 @@ let eventCount = 0;
 let rttMetrics = new Map(); // unit_id -> { native_rtt, app_rtt, sequence, last_seen }
 let rttCheckInterval = null;
 let heartbeatInterval = null;
-let unitId = 'nats-manager-ui'; // Our unit ID for echo responses
 let uiSequence = 0; // Sequence counter for our own metrics
+
+// Generate unique unit ID from browser fingerprint
+function generateUnitId() {
+    // Check for explicit override in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const explicitClient = urlParams.get('client');
+    if (explicitClient) {
+        return `nats-ui-${explicitClient}`;
+    }
+    
+    // Auto-detect from user agent
+    const ua = navigator.userAgent;
+    
+    // Detect type: mobile vs laptop
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+    const type = isMobile ? 'mobile' : 'laptop';
+    
+    // Detect OS
+    let os = 'unknown';
+    if (/Windows/i.test(ua)) os = 'win';
+    else if (/Mac|iPhone|iPad|iPod/i.test(ua)) os = 'mac';
+    else if (/Linux/i.test(ua)) os = 'linux';
+    else if (/Android/i.test(ua)) os = 'android';
+    
+    // Generate random suffix for uniqueness
+    const random = Math.random().toString(36).substring(2, 6);
+    
+    return `nats-ui-${type}-${os}-${random}`;
+}
+
+// Our unit ID for this client session
+let unitId = generateUnitId();
+console.log('Generated unitId:', unitId);
 
 // Time Sync Metrics tracking
 let timeMetrics = new Map(); // unit_id -> { source, quality, ptp_offset, ntp_offset, last_seen }
@@ -37,6 +69,21 @@ function initConfig() {
         ? `${domain}:${port}` 
         : domain;
     document.getElementById('domainDisplay').textContent = `(${display})`;
+    
+    // Display and log our identity
+    try {
+        const clientIdEl = document.getElementById('clientId');
+        if (clientIdEl) {
+            clientIdEl.textContent = unitId;
+            console.log('Client ID displayed:', unitId);
+        } else {
+            console.error('clientId element not found in DOM');
+        }
+    } catch (e) {
+        console.error('Error displaying client ID:', e);
+    }
+    console.log(`UI Client Identity: ${unitId}`);
+    addEvent(`Client identity: ${unitId}`, 'info');
 }
 
 // Update status indicator
@@ -426,7 +473,7 @@ async function connectNATS() {
             maxReconnectAttempts: 10,
             user: 'admin',
             pass: 'changeit',
-            name: unitId, // Identify ourselves
+            name: unitId, // Unique identity for this client
         });
         
         console.log('NATS connected:', nc.getServer());
