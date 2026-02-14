@@ -201,3 +201,87 @@ None currently.
 - [x] Real-world latency validation (WiFi + Mobile)
 - [x] Guardian management script (guardian.sh)
 - [x] Echo pattern for application-level RTT
+
+
+### Phase 4: Mission Critical Mode & Advanced Timing (Next)
+
+#### 4.1 Mission Critical Playback 🟡
+- [ ] Windowed playback buffer (200-500ms)
+  - [ ] Collect packets before playing
+  - [ ] Sort by TX timestamp
+  - [ ] Insert late packets at correct position
+- [ ] Late arrival indicators in UI
+  - [ ] Show "[INSERTED - arrived Xms late]"
+  - [ ] Different color/icon for inserted messages
+- [ ] Automatic mode switching
+  - [ ] Realtime (1ms) - all GPS locked
+  - [ ] Corrected (20ms) - mixed sync sources
+  - [ ] Mission Critical (200-500ms) - unsynced/indoor
+- [ ] Adaptive Voice Frame QoS
+  - [ ] Per-client frame sizing (20/40/60ms) based on conditions
+  - [ ] Superframe structure for strong clients
+  - [ ] Latency thresholds: <70ms, <150ms, late entry
+  - [ ] Guardian recommendations to clients
+
+#### 4.2 Network Health Monitor
+- [ ] Guardian calculates global clock skew
+  - [ ] Max offset between any two clients
+  - [ ] Percentage of unsynced clients
+  - [ ] Recommended buffer time
+- [ ] Publish qos.global.mode recommendations
+- [ ] Client auto-switching based on network health
+
+
+### Phase 6: Universal Backbone & Mesh Networking (Future Vision)
+
+#### 6.1 Femto Node (nuNode) Proof of Concept
+- [ ] Hardware selection
+  - [ ] Raspberry Pi Zero 2 W / Orange Pi
+  - [ ] AliExpress 500mW dual-band radio (2.4GHz + 5GHz)
+  - [ ] Battery/power management
+- [ ] OpenWRT/Alpine Linux image
+  - [ ] NATS Leaf Node for ARM
+  - [ ] Guardian cross-compile for ARM64
+  - [ ] BATMAN-adv or 802.11s mesh
+  - [ ] WireGuard VPN to core
+- [ ] Guardian mesh features
+  - [ ] Neighbor discovery
+  - [ ] Link quality monitoring (RSSI, packet loss)
+  - [ ] Battery/thermal monitoring
+
+#### 6.2 Mesh Roaming
+- [ ] Handover detection
+  - [ ] Signal strength trending
+  - [ ] Better node discovery
+- [ ] Guardian QoS advisory for roaming
+  - [ ] Publish handover recommendations
+  - [ ] Seamless connection migration
+- [ ] Pre-connect to multiple nodes
+  - [ ] Maintain connections to current + next best node
+  - [ ] Switch when threshold crossed
+
+#### 6.3 Transport Agnostic Protocol
+- [ ] LoRaWAN integration (low-bandwidth sensors)
+- [ ] Satellite link tolerance (high latency)
+- [ ] 4G/5G handover awareness
+- [ ] Dynamic frame sizing per transport
+
+#### 6.4 First Responder Use Case
+- [ ] Firefighter helmet cam streaming
+- [ ] Vital signs monitoring (heart rate, temp)
+- [ ] Team coordination voice
+- [ ] Incident command dashboard
+- [ ] Multi-team mesh coordination
+
+---
+
+## Vision Statement
+
+> **nunect is the universal message backbone.**
+>
+> From a $50 Raspberry Pi with an AliExpress radio in a firefighter's backpack,
+> to a global cloud cluster processing millions of e-commerce transactions,
+> the protocol, the security, and the QoS awareness remain the same.
+>
+> Guardian advises. Clients vote. The network adapts.
+> One codebase. Infinite scalability.

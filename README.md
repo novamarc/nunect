@@ -754,6 +754,83 @@ Tested latencies:
 
 ---
 
+### X.6 Distributed Timing (Multi-Site)
+
+**GPS Everywhere (Radio Sites):**
+Radio sites typically have GPS for TETRA/DMR timing. This gives **universal time reference**:
+```
+Site A (GPS PTP)      Site B (GPS PTP)
+T0: Client A sends    T1: Client B receives
+    GPS: 1000.0           GPS: 1000.1
+    
+Latency = 100µs (direct comparison, no offset math)
+```
+
+**Mixed Clocks (NTP-only sites):**
+When some sites lack GPS, client-side skew correction:
+```javascript
+// From Guardian's qos.global.status
+const senderOffset = 0;      // GPS site
+const myOffset = 5.0;        // NTP site (+5ms ahead)
+const trueLatency = apparentLatency - (myOffset - senderOffset);
+```
+
+### X.7 Mission Critical Mode
+
+For emergency and indoor operations where some participants lack GPS or reliable NTP:
+
+**Playback Modes:**
+| Mode | Window | Description |
+|------|--------|-------------|
+| Realtime | 1ms | Direct playback, all clients GPS locked |
+| Corrected | 20ms | Timestamp offset correction applied |
+| Mission Critical | 200-500ms | Windowed playback with late packet insertion |
+
+**Late Packet Handling:**
+```
+Alpha (GPS):   [0.00s] "Contact!" → arrives at 0.05s
+Beta (no GPS): [0.02s] "Copy!"   → arrives at 0.20s (delayed)
+
+Without correction: Beta heard 18ms late
+With Mission Critical: Beta inserted at [0.02s] with "[INSERTED]" tag
+```
+
+**Automatic Mode Selection:**
+- Guardian monitors network health (% GPS, % unsynced, max clock skew)
+- Publishes `qos.global.mode` recommendation
+- Clients auto-switch: Realtime → Corrected → Mission Critical
+
+**Adaptive Voice Frames:**
+- Strong clients (GPS + good link): 60ms frames or superframes
+- Weak clients (NTP/poor link): 20ms frames for fast recovery
+- Latency targets: <70ms excellent, <150ms acceptable, >150ms late entry
+- See: `docs/adaptive-qos-voice-frames.md`
+
+### X.7 Universal Backbone Vision
+
+nunect is designed as a **transport-agnostic, QoS-aware universal message backbone**:
+
+```
+Femto Node          Mesh Network         Enterprise          Global
+(nuNode)            (MANET)              (Leaf)              (Core)
+   │                    │                   │                   │
+Raspberry Pi    ←──►  Fire Dept      ←──►  Regional      ←──►  Cloud
++ $15 Radio           Team Mesh           Office              Cluster
+
+Same protocol. Same security. Same audit trail.
+Only the frame size changes.
+```
+
+**Use Cases:**
+- **Fire Department**: Helmet cams, vitals, voice over 2.4GHz/5GHz mesh
+- **Festival/Campus**: Local mesh with gateway backhaul
+- **Enterprise**: Regional leaf servers, global core
+- **E-commerce**: High-throughput, minimal latency
+
+See: `docs/universal-backbone-vision.md`
+
+---
+
 ## XI. Architecture: Native vs Custom Boundary
 
 **Design principle: Use NATS native functionality wherever possible. Build only what NATS does not provide.**

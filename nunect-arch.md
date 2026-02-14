@@ -49,6 +49,51 @@
 
 ### Time Synchronization Architecture
 
+#### GPS Everywhere (Radio Sites - RECOMMENDED)
+
+Radio sites typically have GPS for TETRA/DMR timing precision. This gives us **universal time reference** across all sites:
+
+```
+Site A (GPS PTP)      Site B (GPS PTP)      Site C (GPS PTP)
+├─ Guardian-A         ├─ Guardian-B         ├─ Guardian-C
+├─ PTP from GPS       ├─ PTP from GPS       ├─ PTP from GPS
+└─ Timestamp: UTC     └─ Timestamp: UTC     └─ Timestamp: UTC
+
+Result: All timestamps comparable directly - NO inter-site skew correction needed!
+```
+
+**Client latency calculation (GPS everywhere):**
+```javascript
+latency = myTime - senderTimestamp  // Simple subtraction
+```
+
+#### Mixed Clocks (NTP-only sites)
+
+If some sites use NTP without GPS, client-side skew correction is required:
+
+```
+Site A (GPS, offset: 0)    Site C (NTP, offset: +5ms)
+├─ Client A sends          ├─ Client C receives
+│   T=1000.000             │   T=1005.100 (apparent)
+│                          │   T=1000.100 (corrected)
+└──────────────────────────┴──────────────────────────
+
+Client C calculates: trueLatency = apparentLatency - (myOffset - senderOffset)
+```
+
+**Guardian publishes global skew data:**
+```json
+{
+  "sites": {
+    "site-a": {"source": "gps", "offset_ms": 0},
+    "site-c": {"source": "ntp", "offset_ms": 5.0}
+  },
+  "max_clock_skew_ms": 5.0
+}
+```
+
+#### Full Architecture
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    TIME INFRASTRUCTURE                       │
@@ -72,7 +117,7 @@
 │  │  Guardian: Publishes ops.metric.time │                  │
 │  │  - Active source (PTP/NTP/unsynced)  │                  │
 │  │  - Clock quality (locked/tracking)   │                  │
-│  │  - Offset values                     │                  │
+│  │  - Offset from universal time        │                  │
 │  └──────────────────────────────────────┘                  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -264,3 +309,19 @@ Then update `.env` with the https URL provided.
 - Multi-region clustering with gateways
 - Provisioning workflow (Controller + ProMan)
 - Audio codec integration (Opus for PTT)
+- Mission Critical Mode implementation
+  - Windowed playback with out-of-order insertion
+  - Late arrival indicators for unsynced participants
+  - Automatic mode switching based on network health
+  - Indoor/emergency operation without GPS
+- **Universal Backbone Vision** (see docs/universal-backbone-vision.md)
+  - Femto nodes (nuNodes): Raspberry Pi + dual-radio mesh
+  - MANET integration for first responders
+  - Mesh roaming via Guardian QoS advisory
+  - Transport agnostic: WiFi mesh, LoRaWAN, 5G, satellite
+  - One protocol from $50 femto node to global cloud
+- Adaptive Voice Frame QoS
+  - Per-client frame sizing (20/40/60ms) based on link quality
+  - Superframe bundling for strong clients
+  - Latency thresholds: <70ms immediate, <150ms acceptable, >150ms late entry
+  - Dynamic adaptation to network conditions
