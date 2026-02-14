@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// SyncLogEntry represents a single NTP sync event
+type SyncLogEntry struct {
+	Timestamp int64   `json:"ts"`
+	OffsetMs  float64 `json:"offset_ms"`
+	Source    string  `json:"source"`
+}
+
 // TimeStatus represents the current time synchronization state
 type TimeStatus struct {
 	Timestamp   int64   `json:"ts"`
@@ -25,10 +32,12 @@ type TimeStatus struct {
 	PTPState    string  `json:"ptp_state"`          // s0, s1, s2, etc.
 	
 	// NTP/Chrony Status
-	NTPEnabled  bool    `json:"ntp_enabled"`
-	NTPOffset   float64 `json:"ntp_offset_ms"`      // Offset from NTP server (ms)
-	NTPStratum  int     `json:"ntp_stratum"`
-	NTPServers  []string `json:"ntp_servers,omitempty"`
+	NTPEnabled      bool           `json:"ntp_enabled"`
+	NTPOffset       float64        `json:"ntp_offset_ms"`       // Offset from NTP server (ms)
+	NTPStratum      int            `json:"ntp_stratum"`
+	NTPServers      []string       `json:"ntp_servers,omitempty"`
+	NTPCurrentServer string        `json:"ntp_current_server,omitempty"`
+	NTPSyncLog      []SyncLogEntry `json:"ntp_sync_log,omitempty"` // Last N sync events
 	
 	// Selected Source
 	ActiveSource string `json:"active_source"`     // "ptp", "ntp", "unsynced"
@@ -74,6 +83,8 @@ func (m *Monitor) GetStatus() (*TimeStatus, error) {
 		status.NTPOffset = chronyStatus.Offset
 		status.NTPStratum = chronyStatus.Stratum
 		status.NTPServers = chronyStatus.Servers
+		status.NTPCurrentServer = chronyStatus.CurrentServer
+		status.NTPSyncLog = chronyStatus.SyncLog
 	}
 	
 	// Determine active source based on mode and quality
@@ -175,10 +186,12 @@ func (m *Monitor) parsePMCOutput(output string) *ptpInfo {
 }
 
 type chronyInfo struct {
-	Offset   float64
-	Stratum  int
-	Servers  []string
-	Tracking string
+	Offset       float64
+	Stratum      int
+	Servers      []string
+	CurrentServer string
+	SyncLog      []SyncLogEntry
+	Tracking     string
 }
 
 // readChronyStatus reads chronyd tracking status
@@ -207,6 +220,7 @@ func (m *Monitor) readNTPStatus() *chronyInfo {
 func (m *Monitor) parseChronyOutput(output string) *chronyInfo {
 	info := &chronyInfo{
 		Servers: []string{},
+		SyncLog: []SyncLogEntry{},
 	}
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	
@@ -217,6 +231,7 @@ func (m *Monitor) parseChronyOutput(output string) *chronyInfo {
 			parts := strings.Split(line, ":")
 			if len(parts) >= 2 {
 				ref := strings.TrimSpace(parts[1])
+				info.CurrentServer = ref
 				info.Servers = append(info.Servers, ref)
 			}
 		} else if strings.HasPrefix(line, "Stratum") {
@@ -231,6 +246,15 @@ func (m *Monitor) parseChronyOutput(output string) *chronyInfo {
 				offsetStr := parts[3]
 				info.Offset, _ = strconv.ParseFloat(offsetStr, 64)
 				info.Offset *= 1000 // Convert to ms
+				
+				// Add to sync log
+				if info.CurrentServer != "" {
+					info.SyncLog = append(info.SyncLog, SyncLogEntry{
+						Timestamp: time.Now().UnixMilli(),
+						OffsetMs:  info.Offset,
+						Source:    info.CurrentServer,
+					})
+				}
 			}
 		}
 	}

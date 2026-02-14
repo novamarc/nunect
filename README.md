@@ -715,7 +715,31 @@ https://nats.nunet.one:4280/?client=laptop-caia
 https://nats.nunet.one:4280/?client=tablet-ops
 ```
 
-### X.4 Real-World Performance
+### X.4 Message Header Strategy
+
+**Design Principle:** Headers for routing/timing (fast path), Payload for bulk data
+
+| Data Type | Location | Purpose |
+|-----------|----------|---------|
+| Identity (Unit ID, Sequence) | Header | Fast routing, filtering |
+| Timing (TX Timestamp, RTT) | Header | Real-time latency calc |
+| Clock Source/Quality | Header | Quick health check |
+| NTP Server, Sync Log | Payload | Historical analysis |
+
+**Standard Headers (All Messages):**
+```
+X-Unit-ID:          sdr-bridge-01
+X-Sequence:         42
+X-TX-Timestamp:     1707772800000000123  # nanoseconds
+X-Clock-Source:     ptp|ntp|unsynced
+X-Clock-Quality:    locked|tracking|acquiring|freerun
+X-NTP-Offset:       0.5                  # ms from NTP
+X-PTP-Offset:       -150                 # ns from PTP
+X-RTT-Native:       187452               # µs, transport layer
+X-RTT-App:          291326               # µs, full pipeline
+```
+
+### X.5 Real-World Performance
 
 Tested latencies:
 

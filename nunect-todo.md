@@ -48,6 +48,9 @@
   - [x] Auto-generate unit ID from browser fingerprint
   - [x] Detect mobile vs laptop, OS type
   - [x] URL override parameter (`?client=name`)
+- [x] Message Header Strategy
+  - [x] Document: Headers for timing/routing, Payload for bulk
+  - [x] Standard header definitions (X-Unit-ID, X-TX-Timestamp, etc.)
 - [x] Document: HTTP API is read-only, config changes require file edit + reload
 - [x] Rudimentary display: functional first
 - [x] Script handles port conflicts (kills stale processes)

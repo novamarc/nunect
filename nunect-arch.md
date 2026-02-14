@@ -138,6 +138,28 @@ Client A                    Client B (Guardian)
 
 **Override:** URL parameter `?client=custom-name` for explicit identity
 
+### Message Header Strategy
+
+**Design Principle:** Headers for routing/timing, payload for bulk data
+
+| Data Type | Location | Rationale |
+|-----------|----------|-----------|
+| Identity (Unit ID, Sequence) | Header | Fast routing/filtering |
+| Timing (TX timestamp, RTT) | Header | Real-time processing |
+| Clock sync status | Header + Payload | Quick check in header, details in JSON |
+| NTP server, sync log | Payload | Historical data, bulk |
+
+**Standard Headers:**
+```
+X-Unit-ID:          sdr-bridge-01
+X-Sequence:         42
+X-TX-Timestamp:     1707772800000000123 (ns precision)
+X-Clock-Source:     ptp|ntp|unsynced
+X-Clock-Quality:    locked|tracking|acquiring|freerun
+X-RTT-Native:       187452 (µs)
+X-RTT-App:          291326 (µs)
+```
+
 ## Configuration Files
 
 | File | Purpose |

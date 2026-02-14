@@ -378,8 +378,32 @@ function updateLocalTimeStatus(data) {
         formatMicroseconds(data.ptp_offset_ns) : '--';
     document.getElementById('local-ntp-servers').textContent = data.ntp_servers ? 
         data.ntp_servers.join(', ') : '--';
+    document.getElementById('local-ntp-current').textContent = data.ntp_current_server || '--';
     document.getElementById('local-ntp-offset').textContent = data.ntp_offset_ms !== undefined ? 
         `${data.ntp_offset_ms.toFixed(2)}ms` : '--';
+    
+    // Update NTP pool display
+    const ntpPoolEl = document.getElementById('ntp-pool');
+    if (ntpPoolEl && data.ntp_servers) {
+        ntpPoolEl.textContent = data.ntp_servers.join(', ');
+    }
+    
+    // Update current NTP server
+    const ntpCurrentEl = document.getElementById('ntp-current');
+    if (ntpCurrentEl) {
+        ntpCurrentEl.textContent = data.ntp_current_server || '--';
+    }
+    
+    // Update sync log
+    const syncLogEl = document.getElementById('ntp-sync-log');
+    if (syncLogEl && data.ntp_sync_log && data.ntp_sync_log.length > 0) {
+        let logHtml = '';
+        for (const entry of data.ntp_sync_log.slice(-3)) {
+            const time = new Date(entry.ts).toLocaleTimeString();
+            logHtml += `[${time}] offset ${entry.offset_ms > 0 ? '+' : ''}${entry.offset_ms}ms from ${entry.source}<br>`;
+        }
+        syncLogEl.innerHTML = logHtml;
+    }
 }
 
 // Clear Time Sync metrics

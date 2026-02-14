@@ -65,6 +65,12 @@
             <h2>Client RTT Metrics</h2>
             <button class="refresh" onclick="clearRTTMetrics()">Clear</button>
             <span id="rttCount">0 clients</span>
+            <div id="rttExplanation" style="font-size: 0.85em; color: #888; margin: 10px 0; padding: 8px; background: #1a1a1a; border-left: 3px solid #7ee;">
+                <strong>How RTT is calculated:</strong><br>
+                • <span class="rtt-native">Native RTT</span>: Transport layer latency (TCP/WebSocket handshake via nc.RTT())<br>
+                • <span class="rtt-app">App RTT</span>: Full round-trip including NATS routing + echo handler<br>
+                • Method: Request-reply to ops.echo.{unitID} with microsecond precision
+            </div>
             <div id="rttMetrics" style="max-height: 300px; overflow-y: auto;">
                 <table>
                     <tr>
@@ -85,6 +91,19 @@
             <h2>Time Sync Metrics</h2>
             <button class="refresh" onclick="clearTimeMetrics()">Clear</button>
             <span id="timeCount">0 nodes</span>
+            <div id="timeExplanation" style="font-size: 0.85em; color: #888; margin: 10px 0; padding: 8px; background: #1a1a1a; border-left: 3px solid #e7e;">
+                <strong>Clock Synchronization:</strong><br>
+                • PTP (Precision Time Protocol): &lt;1µs accuracy with hardware timestamping<br>
+                • NTP/Chrony: &lt;10ms accuracy, fallback when PTP unavailable<br>
+                • Same NTP pool = can calculate clock difference between clients<br>
+                • Quality: locked (&lt;1ms) → tracking (&lt;10ms) → acquiring → freerun
+            </div>
+            <div id="ntpDetails" style="font-size: 0.85em; color: #888; margin: 10px 0;">
+                <strong>NTP Pool:</strong> <span id="ntp-pool">--</span><br>
+                <strong>Current Server:</strong> <span id="ntp-current">--</span><br>
+                <strong>Sync Log (last 3):</strong>
+                <div id="ntp-sync-log" style="font-family: monospace; font-size: 0.9em; margin-top: 5px;">--</div>
+            </div>
             <div id="timeMetrics" style="max-height: 300px; overflow-y: auto;">
                 <table>
                     <tr>
@@ -109,6 +128,7 @@
                     <tr><td>PTP Master</td><td id="local-ptp-master">--</td></tr>
                     <tr><td>PTP Offset</td><td id="local-ptp-offset">--</td></tr>
                     <tr><td>NTP Servers</td><td id="local-ntp-servers">--</td></tr>
+                    <tr><td>NTP Current</td><td id="local-ntp-current">--</td></tr>
                     <tr><td>NTP Offset</td><td id="local-ntp-offset">--</td></tr>
                 </table>
             </div>
@@ -186,6 +206,6 @@
             domain: "{{NATS_MANAGER_DOMAIN}}"
         };
     </script>
-    <script type="module" src="app.js?v=4"></script>
+    <script type="module" src="app.js?v=5"></script>
 </body>
 </html>
