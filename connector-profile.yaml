@@ -12,6 +12,8 @@ capabilities:
     allow: ["pub", "sub"]
   - subject: "ops.metric.rtt.sdr-bridge-01"
     allow: ["pub"]
+  - subject: "ops.metric.time.sdr-bridge-01"
+    allow: ["pub"]
   # Business subjects
   - subject: "com.bridge.vhf.ch16.voice"
     allow: ["pub", "sub"]

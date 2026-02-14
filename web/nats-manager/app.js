@@ -17,7 +17,12 @@ let eventCount = 0;
 // RTT Metrics tracking
 let rttMetrics = new Map(); // unit_id -> { native_rtt, app_rtt, sequence, last_seen }
 let rttCheckInterval = null;
+let heartbeatInterval = null;
 let unitId = 'nats-manager-ui'; // Our unit ID for echo responses
+let uiSequence = 0; // Sequence counter for our own metrics
+
+// Time Sync Metrics tracking
+let timeMetrics = new Map(); // unit_id -> { source, quality, ptp_offset, ntp_offset, last_seen }
 
 // Initialize connection from injected config
 function initConfig() {
@@ -225,27 +230,186 @@ function handleRTTMetric(data) {
     updateRTTTable();
 }
 
-// Measure our own RTT (like guardian does)
-async function measureOwnRTT() {
+// Handle incoming Time Sync metric
+function handleTimeMetric(data) {
+    const unitId = data.unit_id;
+    if (!unitId) return;
+    
+    timeMetrics.set(unitId, {
+        active_source: data.active_source,
+        clock_quality: data.clock_quality,
+        ptp_offset: data.ptp_offset_ns,
+        ntp_offset: data.ntp_offset_ms,
+        ptp_master: data.ptp_master,
+        ntp_servers: data.ntp_servers,
+        sequence: data.seq,
+        timestamp: data.ts,
+        last_seen: Date.now()
+    });
+    
+    updateTimeTable();
+    
+    // If this is our own unit, update local status display
+    if (unitId === unitId) {
+        updateLocalTimeStatus(data);
+    }
+}
+
+// Update Time Sync metrics table display
+function updateTimeTable() {
+    const container = document.getElementById('timeMetrics');
+    const countEl = document.getElementById('timeCount');
+    
+    if (timeMetrics.size === 0) {
+        container.innerHTML = `
+            <table>
+                <tr>
+                    <th>Unit ID</th>
+                    <th>Source</th>
+                    <th>Quality</th>
+                    <th>PTP Offset</th>
+                    <th>NTP Offset</th>
+                    <th>Last Seen</th>
+                </tr>
+            </table>
+            <p class="note">Waiting for metrics from ops.metric.time.></p>
+        `;
+        countEl.textContent = '0 nodes';
+        return;
+    }
+    
+    let html = `
+        <table>
+            <tr>
+                <th>Unit ID</th>
+                <th>Source</th>
+                <th>Quality</th>
+                <th>PTP Offset</th>
+                <th>NTP Offset</th>
+                <th>Last Seen</th>
+            </tr>
+    `;
+    
+    // Sort by last seen (most recent first)
+    const sorted = Array.from(timeMetrics.entries()).sort((a, b) => b[1].last_seen - a[1].last_seen);
+    
+    for (const [unitId, data] of sorted) {
+        const age = Date.now() - data.last_seen;
+        const ageStr = age < 60000 ? `${Math.floor(age / 1000)}s ago` : `${Math.floor(age / 60000)}m ago`;
+        
+        const sourceClass = data.active_source === 'ptp' ? 'metric-good' : 
+                          data.active_source === 'ntp' ? 'metric-warn' : 'metric-bad';
+        const qualityClass = data.clock_quality === 'locked' ? 'metric-good' : 
+                            data.clock_quality === 'tracking' ? 'metric-warn' : 'metric-bad';
+        
+        const ptpOffset = data.ptp_offset !== undefined ? formatMicroseconds(data.ptp_offset) : '--';
+        const ntpOffset = data.ntp_offset !== undefined ? `${data.ntp_offset.toFixed(2)}ms` : '--';
+        
+        html += `
+            <tr>
+                <td>${unitId}</td>
+                <td class="${sourceClass}">${data.active_source || 'unknown'}</td>
+                <td class="${qualityClass}">${data.clock_quality || 'unknown'}</td>
+                <td>${ptpOffset}</td>
+                <td>${ntpOffset}</td>
+                <td>${ageStr}</td>
+            </tr>
+        `;
+    }
+    
+    html += '</table>';
+    container.innerHTML = html;
+    countEl.textContent = `${timeMetrics.size} node${timeMetrics.size !== 1 ? 's' : ''}`;
+}
+
+// Update local time status display
+function updateLocalTimeStatus(data) {
+    document.getElementById('local-clock-source').textContent = data.active_source || '--';
+    document.getElementById('local-clock-quality').textContent = data.clock_quality || '--';
+    document.getElementById('local-ptp-master').textContent = data.ptp_master || '--';
+    document.getElementById('local-ptp-offset').textContent = data.ptp_offset_ns !== undefined ? 
+        formatMicroseconds(data.ptp_offset_ns) : '--';
+    document.getElementById('local-ntp-servers').textContent = data.ntp_servers ? 
+        data.ntp_servers.join(', ') : '--';
+    document.getElementById('local-ntp-offset').textContent = data.ntp_offset_ms !== undefined ? 
+        `${data.ntp_offset_ms.toFixed(2)}ms` : '--';
+}
+
+// Clear Time Sync metrics
+function clearTimeMetrics() {
+    timeMetrics.clear();
+    updateTimeTable();
+}
+
+// Measure our own RTT and publish metrics (like guardian does)
+async function measureOwnRTTAndPublish() {
     if (!nc) return;
     
+    uiSequence++;
+    const now = Date.now();
+    
+    // Measure app-level RTT using echo pattern
+    const echoSubject = `ops.echo.${unitId}`;
+    const start = performance.now();
+    let appRTT = 0;
+    
     try {
-        // Try to measure app-level RTT using echo pattern
-        // First check if there's an echo service for ourselves
-        const echoSubject = `ops.echo.${unitId}`;
-        const start = performance.now();
-        
-        try {
-            await nc.request(echoSubject, sc.encode('ping'), { timeout: 2000 });
-            const appRTT = performance.now() - start;
-            updateRTTDisplay(appRTT);
-        } catch (e) {
-            // No echo responder for us, just show connected
-            updateRTTDisplay(null);
-        }
+        await nc.request(echoSubject, sc.encode('ping'), { timeout: 2000 });
+        appRTT = performance.now() - start;
+        updateRTTDisplay(appRTT);
     } catch (e) {
-        // Ignore errors
+        // No echo responder for us or timeout
+        updateRTTDisplay(null);
     }
+    
+    // Note: nats.ws doesn't expose native RTT measurement like nats.go
+    // We approximate native RTT as 0 (or could use a separate ping)
+    const nativeRTT = 0;
+    
+    // Build metrics payload (same format as guardian)
+    const metrics = {
+        ts: now,
+        unit_id: unitId,
+        seq: uiSequence,
+        native_rtt_us: Math.round(nativeRTT * 1000), // Convert ms to µs
+        app_rtt_us: Math.round(appRTT * 1000)
+    };
+    
+    // Publish metrics
+    try {
+        await nc.publish(`ops.metric.rtt.${unitId}`, sc.encode(JSON.stringify(metrics)));
+    } catch (e) {
+        console.error('Failed to publish metrics:', e);
+    }
+    
+    // Publish heartbeat (same as guardian)
+    const heartbeatData = {
+        status: 'healthy',
+        sequence: uiSequence,
+        ts: now
+    };
+    
+    try {
+        const headers = {
+            'X-Unit-ID': unitId,
+            'X-Sequence': String(uiSequence),
+            'X-Native-RTT': `${nativeRTT}ms`,
+            'X-App-RTT': `${appRTT.toFixed(3)}ms`,
+            'X-Timestamp': String(now)
+        };
+        
+        const h = nc.headers();
+        for (const [k, v] of Object.entries(headers)) {
+            h.append(k, v);
+        }
+        
+        await nc.publish(`ops.heartbeat.${unitId}`, sc.encode(JSON.stringify(heartbeatData)), { headers: h });
+    } catch (e) {
+        console.error('Failed to publish heartbeat:', e);
+    }
+    
+    // Also update our own display
+    handleRTTMetric(metrics);
 }
 
 // Connect to NATS via WebSocket using nats.ws library
@@ -276,6 +440,32 @@ async function connectNATS() {
                 try {
                     const data = JSON.parse(sc.decode(msg.data));
                     handleRTTMetric(data);
+                } catch (e) {
+                    // Invalid JSON, ignore
+                }
+            }
+        })();
+        
+        // Subscribe to Time Sync metrics from all clients
+        const timeSub = nc.subscribe('ops.metric.time.>');
+        (async () => {
+            for await (const msg of timeSub) {
+                try {
+                    const data = JSON.parse(sc.decode(msg.data));
+                    handleTimeMetric(data);
+                } catch (e) {
+                    // Invalid JSON, ignore
+                }
+            }
+        })();
+        
+        // Subscribe to Time Config updates
+        const timeConfigSub = nc.subscribe('ops.time.config');
+        (async () => {
+            for await (const msg of timeConfigSub) {
+                try {
+                    const data = JSON.parse(sc.decode(msg.data));
+                    console.log('Time config received:', data);
                 } catch (e) {
                     // Invalid JSON, ignore
                 }
@@ -314,10 +504,10 @@ async function connectNATS() {
             }
         })();
         
-        // Start periodic RTT measurement
+        // Start periodic RTT measurement and heartbeat (like guardian)
         if (rttCheckInterval) clearInterval(rttCheckInterval);
-        rttCheckInterval = setInterval(measureOwnRTT, 5000);
-        measureOwnRTT(); // Measure immediately
+        rttCheckInterval = setInterval(measureOwnRTTAndPublish, 5000);
+        measureOwnRTTAndPublish(); // Measure immediately
         
         // Handle disconnect
         nc.closed().then(() => {
@@ -560,3 +750,4 @@ window.fetchJsz = fetchJsz;
 window.clearEvents = clearEvents;
 window.clearActivity = clearActivity;
 window.clearRTTMetrics = clearRTTMetrics;
+window.clearTimeMetrics = clearTimeMetrics;

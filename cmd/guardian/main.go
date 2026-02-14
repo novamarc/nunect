@@ -10,13 +10,14 @@ import (
 
 	"crypto/tls"
 	"nunect/internal/config"
+	"nunect/internal/timesync"
 
 	"github.com/nats-io/nats.go"
 )
 
 // RTTMetrics represents a single RTT measurement
 type RTTMetrics struct {
-	Timestamp int64 `json:"ts"`
+	Timestamp int64  `json:"ts"`
 	UnitID    string `json:"unit_id"`
 	Sequence  int    `json:"seq"`
 	NativeRTT int64  `json:"native_rtt_us"` // Transport layer RTT in microseconds
@@ -33,10 +34,17 @@ func main() {
 	user := os.Getenv("NATS_SYS_USER")
 	pass := os.Getenv("NATS_SYS_PASSWORD")
 	serverURL := os.Getenv("NATS_URL")
+	timeSyncMode := os.Getenv("TIME_SYNC_MODE")
+	if timeSyncMode == "" {
+		timeSyncMode = "auto"
+	}
 
 	if user == "" || pass == "" {
 		log.Fatal("NATS_SYS_USER oder NATS_SYS_PASSWORD nicht gesetzt!")
 	}
+
+	// Initialize time sync monitor
+	timeMonitor := timesync.NewMonitor(p.Metadata.UnitID, timeSyncMode)
 
 	// Connect with TLS & Auth
 	opts := []nats.Option{
@@ -55,17 +63,21 @@ func main() {
 
 	log.Printf("Guardian [%s] erfolgreich eingeloggt!", p.Metadata.UnitID)
 
+	// Publish time config for clients (one-time at start)
+	timeConfig := timeMonitor.GetTimeConfig()
+	timeConfigJSON, _ := json.Marshal(timeConfig)
+	if err := nc.Publish("ops.time.config", timeConfigJSON); err != nil {
+		log.Printf("Failed to publish time config: %v", err)
+	}
+	log.Printf("Time config published: mode=%s", timeSyncMode)
+
 	// Setup echo responder for app-level RTT measurement
-	// Any client can send a request to this subject to measure full round-trip
 	echoSubject := fmt.Sprintf("ops.echo.%s", p.Metadata.UnitID)
 	_, err = nc.Subscribe(echoSubject, func(msg *nats.Msg) {
-		// Echo back with minimal processing
-		// Add server receive timestamp for clock drift analysis
 		receivedAt := time.Now().UnixMicro()
 		
 		headers := nats.Header{}
 		if msg.Header != nil {
-			// Copy through any existing headers
 			for k, v := range msg.Header {
 				headers[k] = v
 			}
@@ -90,10 +102,12 @@ func main() {
 	defer ticker.Stop()
 
 	heartbeatSubject := fmt.Sprintf("ops.heartbeat.%s", p.Metadata.UnitID)
-	metricsSubject := fmt.Sprintf("ops.metric.rtt.%s", p.Metadata.UnitID)
+	rttMetricsSubject := fmt.Sprintf("ops.metric.rtt.%s", p.Metadata.UnitID)
+	timeMetricsSubject := fmt.Sprintf("ops.metric.time.%s", p.Metadata.UnitID)
 
 	for range ticker.C {
 		sequence++
+		now := time.Now()
 
 		// Check permissions
 		if !p.IsAllowed(heartbeatSubject, "pub") {
@@ -111,9 +125,14 @@ func main() {
 		// 2. Measure Application RTT (full round-trip through echo)
 		appRTT := measureAppRTT(nc, echoSubject)
 
-		// 3. Build metrics
-		now := time.Now()
-		metrics := RTTMetrics{
+		// 3. Get Time Sync Status
+		timeStatus, err := timeMonitor.GetStatus()
+		if err != nil {
+			log.Printf("Time sync check failed: %v", err)
+		}
+
+		// 4. Build RTT metrics
+		rttMetrics := RTTMetrics{
 			Timestamp: now.UnixMilli(),
 			UnitID:    p.Metadata.UnitID,
 			Sequence:  sequence,
@@ -121,7 +140,7 @@ func main() {
 			AppRTT:    appRTT.Microseconds(),
 		}
 
-		// 4. Publish heartbeat with metadata
+		// 5. Publish heartbeat with metadata
 		heartbeatData := map[string]interface{}{
 			"status":   "healthy",
 			"sequence": sequence,
@@ -135,6 +154,8 @@ func main() {
 			"X-Native-RTT":    []string{nativeRTT.String()},
 			"X-App-RTT":       []string{appRTT.String()},
 			"X-Timestamp":     []string{strconv.FormatInt(now.UnixMilli(), 10)},
+			"X-Clock-Source":  []string{timeStatus.ActiveSource},
+			"X-Clock-Quality": []string{timeStatus.ClockQuality},
 		}
 
 		if err := nc.PublishMsg(&nats.Msg{
@@ -146,20 +167,36 @@ func main() {
 			continue
 		}
 
-		// 5. Publish detailed metrics to separate subject
-		metricsJSON, _ := json.Marshal(metrics)
-		if err := nc.Publish(metricsSubject, metricsJSON); err != nil {
-			log.Printf("Failed to publish metrics: %v", err)
+		// 6. Publish RTT metrics
+		rttMetricsJSON, _ := json.Marshal(rttMetrics)
+		if err := nc.Publish(rttMetricsSubject, rttMetricsJSON); err != nil {
+			log.Printf("Failed to publish RTT metrics: %v", err)
+		}
+
+		// 7. Publish Time Sync metrics (if available)
+		if timeStatus != nil {
+			timeStatus.Sequence = sequence
+			timeMetricsJSON, _ := json.Marshal(timeStatus)
+			if err := nc.Publish(timeMetricsSubject, timeMetricsJSON); err != nil {
+				log.Printf("Failed to publish time metrics: %v", err)
+			}
 		}
 
 		nc.Flush()
-		log.Printf("[%s] seq=%d native=%v app=%v",
-			p.Metadata.UnitID, sequence, nativeRTT, appRTT)
+		
+		// Log summary
+		if timeStatus != nil && timeStatus.ActiveSource != "unsynced" {
+			log.Printf("[%s] seq=%d native=%v app=%v clock=%s/%s",
+				p.Metadata.UnitID, sequence, nativeRTT, appRTT,
+				timeStatus.ActiveSource, timeStatus.ClockQuality)
+		} else {
+			log.Printf("[%s] seq=%d native=%v app=%v",
+				p.Metadata.UnitID, sequence, nativeRTT, appRTT)
+		}
 	}
 }
 
 // measureAppRTT performs a request-reply to measure full application latency
-// Returns: total round-trip time (includes network + server processing + response)
 func measureAppRTT(nc *nats.Conn, subject string) time.Duration {
 	start := time.Now()
 	

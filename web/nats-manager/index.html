@@ -76,6 +76,41 @@
 
     <div class="grid">
         <div class="section">
+            <h2>Time Sync Metrics</h2>
+            <button class="refresh" onclick="clearTimeMetrics()">Clear</button>
+            <span id="timeCount">0 nodes</span>
+            <div id="timeMetrics" style="max-height: 300px; overflow-y: auto;">
+                <table>
+                    <tr>
+                        <th>Unit ID</th>
+                        <th>Source</th>
+                        <th>Quality</th>
+                        <th>PTP Offset</th>
+                        <th>NTP Offset</th>
+                        <th>Last Seen</th>
+                    </tr>
+                </table>
+                <p class="note">Waiting for metrics from ops.metric.time.></p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Time Sync Status</h2>
+            <div id="timeStatus">
+                <table>
+                    <tr><td>Active Source</td><td id="local-clock-source">--</td></tr>
+                    <tr><td>Clock Quality</td><td id="local-clock-quality">--</td></tr>
+                    <tr><td>PTP Master</td><td id="local-ptp-master">--</td></tr>
+                    <tr><td>PTP Offset</td><td id="local-ptp-offset">--</td></tr>
+                    <tr><td>NTP Servers</td><td id="local-ntp-servers">--</td></tr>
+                    <tr><td>NTP Offset</td><td id="local-ntp-offset">--</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="section">
             <h2>Subscriptions (/subsz)</h2>
             <button class="refresh" onclick="fetchSubsz()">Refresh</button>
             <pre id="subsz">Loading configuration...</pre>
